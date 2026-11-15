@@ -238,14 +238,14 @@ set_up_page_tables:
 	jne .map_lvl3_table
 .done:
 
+	; Load level 1 table to CR3 register.
+	mov eax, page_table.level1
+	mov cr3, eax
+
     ; Enable PAE flag in CR4 (physical address extension).
     mov eax, cr4
     or eax, 1 << 5
     mov cr4, eax
-
-	; Load level4 table to CR3 register.
-	mov eax, page_table.level1
-	mov cr3, eax
 
 	; Set long mode bit in a model specific register called EFER
 	mov ecx, 0xC0000080 ; EFER number
