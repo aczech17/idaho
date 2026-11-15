@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 
+build_tools = ["nasm", "clang", "lld"]
 emulation_tools = ["qemu-system-x86_64"]
 
 bootloader_sources = ['src/boot/stage1.asm', 'src/boot/stage2.asm']
@@ -151,16 +152,17 @@ def assemble_kernel_asm(source, output):
         sys.exit(1)
 
 def compile_kernel(
-        c_compiler,
         c_source_files,
         asm_objects,
         linker_script_path,
         output,
 ):
     compile_command = [
-        c_compiler,
-        "-std=c11",
+        "clang",
+        "--target=x86_64-unknown-none-elf",
         "-mabi=sysv",
+        "-fuse-ld=lld",
+        "-std=c11",
         "-ffreestanding",
         "-fno-pie",
         "-fno-pic",
@@ -264,7 +266,7 @@ def create_disk_image():
             with open(filename, "rb") as f:
                 img_file.write(f.read())
 
-def build(c_compiler):
+def build():
     print("Compiling to out directory.")
     os.makedirs('out', exist_ok=True)
 
@@ -279,9 +281,8 @@ def build(c_compiler):
 
     asm_objects = [path[1] for path in kernel_asm_sources_and_outputs]
 
-    print(f"{c_compiler} set as the C compiler.")
     print("Compiling kernel... ", end="")
-    compile_kernel(c_compiler, kernel_c_sources, asm_objects , linker_script_path, 'out/kernel.elf')
+    compile_kernel(kernel_c_sources, asm_objects , linker_script_path, 'out/kernel.elf')
     print("Compiled to out/kernel.elf")
 
     write_kernel_layout('out/kernel.elf')
@@ -347,6 +348,7 @@ def qemu_debug(debug_command, delay):
 def clean_all():
     shutil.rmtree('out', ignore_errors=True)
 
+
 def main():
     args = parse_arguments()
 
@@ -357,19 +359,9 @@ def main():
     build_request = args.force_build or build_is_needed()
 
     if build_request:
-        if os.name == "posix":
-            c_compiler = "gcc"
-        elif os.name == "nt": # windows
-            c_compiler = "x86_64-elf-gcc"
-        else:
-            print(f"Error: Unsupported platform {os.name}.")
-            return
-
-        build_tools = ["nasm", c_compiler]
-
         if not check_tools(build_tools):
             return
-        build(c_compiler)
+        build()
 
     if not build_request and args.command is None:
         print("Nothing to do.")
