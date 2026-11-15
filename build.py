@@ -6,7 +6,6 @@ import subprocess
 import sys
 import time
 
-build_tools = ["nasm", "gcc"]
 emulation_tools = ["qemu-system-x86_64"]
 
 bootloader_sources = ['src/boot/stage1.asm', 'src/boot/stage2.asm']
@@ -152,35 +151,32 @@ def assemble_kernel_asm(source, output):
         sys.exit(1)
 
 def compile_kernel(
+        c_compiler,
         c_source_files,
         asm_objects,
         linker_script_path,
         output,
 ):
-    compile_command = """
-    gcc
-    -std=c11
-    -ffreestanding
-    -fno-pie
-    -fno-pic
-    -fno-stack-protector
-    -fno-asynchronous-unwind-tables
-    -mno-red-zone
-    -nostdlib
-    -static
-    -Wall
-    -Wextra
-    -s
-    {c_source_files}
-    {asm_objects}
-    -T {linker_script_path}
-    -o {output}
-""".format(
-        c_source_files=" ".join(c_source_files),
-        asm_objects=" ".join(asm_objects),
-        linker_script_path=linker_script_path,
-        output=output
-    ).split()
+    compile_command = [
+        c_compiler,
+        "-std=c11",
+        "-mabi=sysv",
+        "-ffreestanding",
+        "-fno-pie",
+        "-fno-pic",
+        "-fno-stack-protector",
+        "-fno-asynchronous-unwind-tables",
+        "-mno-red-zone",
+        "-nostdlib",
+        "-static",
+        "-Wall",
+        "-Wextra",
+        "-s",
+        *c_source_files,
+        *asm_objects,
+        "-T", linker_script_path,
+        "-o", output
+    ]
 
     try:
         subprocess.run(compile_command, check=True)
@@ -268,7 +264,7 @@ def create_disk_image():
             with open(filename, "rb") as f:
                 img_file.write(f.read())
 
-def build():
+def build(c_compiler):
     print("Compiling to out directory.")
     os.makedirs('out', exist_ok=True)
 
@@ -283,8 +279,9 @@ def build():
 
     asm_objects = [path[1] for path in kernel_asm_sources_and_outputs]
 
+    print(f"{c_compiler} set as the C compiler.")
     print("Compiling kernel... ", end="")
-    compile_kernel(kernel_c_sources, asm_objects , linker_script_path, 'out/kernel.elf')
+    compile_kernel(c_compiler, kernel_c_sources, asm_objects , linker_script_path, 'out/kernel.elf')
     print("Compiled to out/kernel.elf")
 
     write_kernel_layout('out/kernel.elf')
@@ -350,13 +347,7 @@ def qemu_debug(debug_command, delay):
 def clean_all():
     shutil.rmtree('out', ignore_errors=True)
 
-
 def main():
-    if sys.platform != 'linux':
-        print(f"ERROR: Unsupported platform {sys.platform}.")
-        print("This code is meant to be compiled on Linux. Cross compiling to ELF not supported yet.")
-        return
-
     args = parse_arguments()
 
     if args.command == "clean":
@@ -366,9 +357,19 @@ def main():
     build_request = args.force_build or build_is_needed()
 
     if build_request:
+        if os.name == "posix":
+            c_compiler = "gcc"
+        elif os.name == "nt": # windows
+            c_compiler = "x86_64-elf-gcc"
+        else:
+            print(f"Error: Unsupported platform {os.name}.")
+            return
+
+        build_tools = ["nasm", c_compiler]
+
         if not check_tools(build_tools):
             return
-        build()
+        build(c_compiler)
 
     if not build_request and args.command is None:
         print("Nothing to do.")
