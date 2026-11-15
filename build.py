@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 
-build_tools = ["nasm", "gcc"]
+build_tools = ["nasm", "clang"]
 emulation_tools = ["qemu-system-x86_64"]
 
 bootloader_sources = ['src/boot/stage1.asm', 'src/boot/stage2.asm']
@@ -157,30 +157,27 @@ def compile_kernel(
         linker_script_path,
         output,
 ):
-    compile_command = """
-    gcc
-    -std=c11
-    -ffreestanding
-    -fno-pie
-    -fno-pic
-    -fno-stack-protector
-    -fno-asynchronous-unwind-tables
-    -mno-red-zone
-    -nostdlib
-    -static
-    -Wall
-    -Wextra
-    -s
-    {c_source_files}
-    {asm_objects}
-    -T {linker_script_path}
-    -o {output}
-""".format(
-        c_source_files=" ".join(c_source_files),
-        asm_objects=" ".join(asm_objects),
-        linker_script_path=linker_script_path,
-        output=output
-    ).split()
+    compile_command = [
+        "clang",
+        "--target=x86_64-unknown-none-elf",
+        "-mabi=sysv",
+        "-std=c11",
+        "-ffreestanding",
+        "-fno-pie",
+        "-fno-pic",
+        "-fno-stack-protector",
+        "-fno-asynchronous-unwind-tables",
+        "-mno-red-zone",
+        "-nostdlib",
+        "-static",
+        "-Wall",
+        "-Wextra",
+        "-s",
+        *c_source_files,
+        *asm_objects,
+        "-T", linker_script_path,
+        "-o", output
+    ]
 
     try:
         subprocess.run(compile_command, check=True)
@@ -352,11 +349,6 @@ def clean_all():
 
 
 def main():
-    if sys.platform != 'linux':
-        print(f"ERROR: Unsupported platform {sys.platform}.")
-        print("This code is meant to be compiled on Linux. Cross compiling to ELF not supported yet.")
-        return
-
     args = parse_arguments()
 
     if args.command == "clean":
