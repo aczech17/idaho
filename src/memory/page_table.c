@@ -36,7 +36,8 @@ bool map_address(Virt_addr virt_addr, Phys_addr phys_addr, u64 flags)
     for (u32 level = 1; level <= 4; ++level)
     {
         u64 virt_addr_shift = 48 - 9 * level;
-        u64 index = (virt_addr >> virt_addr_shift) & 0b111111111;
+        u64 index = (virt_addr >> virt_addr_shift) & 0x1FF;
+        
         Page_table_entry entry = current_page_table->entry[index];
 
         if (level == 4)
@@ -72,13 +73,20 @@ bool map_address(Virt_addr virt_addr, Phys_addr phys_addr, u64 flags)
 
 Phys_addr get_phys_addr(const Virt_addr virt_addr)
 {
+    // Check if the address is canonical.
+    u64 upper_bits = virt_addr >> 48;
+    u64 sign_bit = (virt_addr >> 47) & 1;
+    bool canonical = upper_bits == (sign_bit != 0 ? 0xFFFF : 0);
+
+    if (!canonical)
+        return INVALID_ADDR;
+
     const Page_table* pt = global_page_table;
-    Phys_addr phys_addr, frame_base, frame_offset;
 
     for (u32 level = 1; level <= 4; ++level)
     {
         u64 virt_addr_shift = 48 - 9 * level;
-        u64 index = (virt_addr >> virt_addr_shift) & 0b111111111;
+        u64 index = (virt_addr >> virt_addr_shift) & 0x1FF;
         Page_table_entry entry = pt->entry[index];
 
         if (!(entry & PTE_PRESENT))
@@ -86,26 +94,30 @@ Phys_addr get_phys_addr(const Virt_addr virt_addr)
 
         if (level == 2 && (entry & PTE_HUGE_PAGE))
         {
-            frame_base = entry & PTE_1_GIB_PHYSICAL_ADDRESS_MASK;
-            frame_offset = virt_addr & 0x3FFFFFFF; // 30 lowest bits
+            Phys_addr frame_base = entry & PTE_1_GIB_PHYSICAL_ADDRESS_MASK;
+            Phys_addr frame_offset = virt_addr & 0x3FFFFFFF; // 30 lowest bits
 
             return frame_base | frame_offset;
         }
 
         if (level == 3 && (entry & PTE_HUGE_PAGE))
         {
-            frame_base = entry & PTE_2_MIB_PHYSICAL_ADDRESS_MASK;
-            frame_offset = virt_addr & 0x1FFFFF; // 21 lowest bits
+            Phys_addr frame_base = entry & PTE_2_MIB_PHYSICAL_ADDRESS_MASK;
+            Phys_addr frame_offset = virt_addr & 0x1FFFFF; // 21 lowest bits
 
             return frame_base | frame_offset;
         }
 
-        phys_addr = entry & PTE_4_KIB_PHYSICAL_ADDRESS_MASK;
-        pt = (const Page_table*)phys_addr;
+        if (level == 4)
+        {
+            Phys_addr frame_base = entry & PTE_4_KIB_PHYSICAL_ADDRESS_MASK;
+            Phys_addr frame_offset = virt_addr & 0xFFF;
+
+            return frame_base | frame_offset;
+        }
+
+        pt = (const Page_table*)(entry & PTE_4_KIB_PHYSICAL_ADDRESS_MASK);
     }
 
-    frame_base = phys_addr;
-    frame_offset = virt_addr & 0xFFF;
-
-    return frame_base | frame_offset;
+    return 0; // So the compiler doesn't complain.
 }

@@ -19,7 +19,7 @@ static void write_char_vga(char c, size_t row, size_t col, char color)
     *(dest + 1) = color;
 }
 
-static void scroll_down()
+static void scroll_down(void)
 {
     memory_copy(VGA_ADDRESS, VGA_ADDRESS + VGA_WIDTH * 2, VGA_SIZE - VGA_WIDTH * 2);
 
@@ -33,7 +33,7 @@ static void scroll_down()
     global_vga_buffer.col = 0;
 }
 
-void clear_screen()
+void clear_screen(void)
 {
     for (char* dest = VGA_ADDRESS; dest < VGA_ADDRESS + VGA_SIZE; dest += 2)
     {

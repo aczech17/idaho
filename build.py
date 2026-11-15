@@ -173,6 +173,7 @@ def compile_kernel(
         "-static",
         "-Wall",
         "-Wextra",
+        "-Wpedantic",
         "-s",
         *c_source_files,
         *asm_objects,
