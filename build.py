@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 
-build_tools = ["nasm", "clang"]
+build_tools = ["nasm", "clang", "lld"]
 emulation_tools = ["qemu-system-x86_64"]
 
 bootloader_sources = ['src/boot/stage1.asm', 'src/boot/stage2.asm']
@@ -161,6 +161,7 @@ def compile_kernel(
         "clang",
         "--target=x86_64-unknown-none-elf",
         "-mabi=sysv",
+        "-fuse-ld=lld",
         "-std=c11",
         "-ffreestanding",
         "-fno-pie",
