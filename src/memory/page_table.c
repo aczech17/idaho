@@ -24,8 +24,14 @@
     47-39   38-30   29-21   20-12   11-0
 */
 
-bool map_address(Virt_addr virt_addr, Phys_addr phys_addr)
+bool map_address(Virt_addr virt_addr, Phys_addr phys_addr, u64 flags)
 {
+    flags |= PTE_PRESENT;
+
+    u64 table_flags = PTE_PRESENT | PTE_WRITABLE;
+    if (flags & PTE_USER)
+        table_flags |= PTE_USER;
+
     Page_table* current_page_table = global_page_table;
     for (u32 level = 1; level <= 4; ++level)
     {
@@ -35,7 +41,8 @@ bool map_address(Virt_addr virt_addr, Phys_addr phys_addr)
 
         if (level == 4)
         {
-            current_page_table->entry[index] = PTE_PRESENT | PTE_WRITABLE | (phys_addr & PTE_4_KIB_PHYSICAL_ADDRESS_MASK);
+            current_page_table->entry[index] = (phys_addr & PTE_4_KIB_PHYSICAL_ADDRESS_MASK) | flags;
+
             invalidate_tlb_entry(virt_addr);
             return true;
         }
@@ -49,8 +56,12 @@ bool map_address(Virt_addr virt_addr, Phys_addr phys_addr)
             Page_table* next_lvl_pt_addr = (Page_table*)new_frame;
             memset(next_lvl_pt_addr, 0, FRAME_SIZE);
 
-            current_page_table->entry[index] = PTE_PRESENT | PTE_WRITABLE |
-                ((Phys_addr)next_lvl_pt_addr & PTE_4_KIB_PHYSICAL_ADDRESS_MASK);
+            current_page_table->entry[index] =
+                ((Phys_addr)next_lvl_pt_addr & PTE_4_KIB_PHYSICAL_ADDRESS_MASK) | table_flags;
+        }
+        else
+        {
+            current_page_table->entry[index] |= table_flags;
         }
 
         current_page_table = (Page_table*)(current_page_table->entry[index] & PTE_4_KIB_PHYSICAL_ADDRESS_MASK);

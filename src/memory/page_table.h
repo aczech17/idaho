@@ -28,7 +28,7 @@ typedef struct
 
 extern Page_table* global_page_table;
 
-bool map_address(Virt_addr, Phys_addr);
+bool map_address(Virt_addr, Phys_addr, u64 flags);
 Phys_addr get_phys_addr(const Virt_addr virt_addr);
 
 #endif // PAGE_TABLE_H
