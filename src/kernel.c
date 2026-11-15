@@ -1,8 +1,8 @@
-#include <stdalign.h>
 #include "memory/phys_memory_map.h"
 #include "memory/frame_allocator.h"
 #include "memory/page_table.h"
 #include "interrupt/idt.h"
+#include "vga.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -29,7 +29,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     const u64 KERNEL_MEM_SIZE = 1 << 30; // The government will feed itself.
 
     disable_bios_cursor();
-    vga_printf("%a"); // clear screen
+    clear_screen();
     vga_printf("%ZModern OS. Witamy!\n%z\n", 0x1F);
 
     Phys_memory_map phys_memory_regions;
@@ -47,20 +47,8 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     global_page_table = (Page_table*)(kernel_mem_info->page_table_address);
     vga_printf("\nPage table at %X\n", global_page_table);
 
-    // setup_page_tables(&pt_level1, &pt_level2, &pt_level3, pt_level4, &kernel_regions);
-    // vga_printf("Page tables set up.\n");
-
     setup_idt(idt);
     vga_printf("IDT set up.%z\n");
-
-    // vga_printf("Frame allocation test:\n");
-    // for (int i = 0; i < 5; ++i)
-    // {
-    //     Frame_address kernel_frame = allocate_kernel_frame(&global_frame_allocator);
-    //     Frame_address general_frame = allocate_general_frame(&global_frame_allocator);
-    //
-    //     vga_printf("K: %X; G: %X\n", kernel_frame, general_frame);
-    // }
 
     vga_printf("\nTrying to provoke page fault.\n");
     volatile u8* addr = (u8*)(1 << 31);

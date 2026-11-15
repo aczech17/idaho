@@ -10,7 +10,6 @@ size_t string_len(const char* text)
     return len;
 }
 
-
 void memory_copy(char* dst, const char* src, size_t count)
 {
     while (count--)
@@ -29,15 +28,6 @@ void* memset(void* dest, int value, size_t count)
 
 void vga_printf(const char* format, ...)
 {
-    const char default_color = 0x07; // gray on black
-
-    static Vga_buffer vga =
-    {
-        .row = 0,
-        .col = 0,
-        .color = default_color,
-    };
-
     va_list args;
     va_start(args, format);
 
@@ -46,7 +36,7 @@ void vga_printf(const char* format, ...)
         if (*format != '%')
         {
             char c = *format;
-            write_char(&vga, c);
+            write_char(c);
             continue;
         }
 
@@ -56,65 +46,55 @@ void vga_printf(const char* format, ...)
 
         switch (*format)
         {
-            case 'A':
-                vga.color = (char)va_arg(args, int);
-                clear_screen(&vga);
-                break;
-
-            case 'a':
-                vga.color = default_color;
-                clear_screen(&vga);
-                break;
-
             case 'i':
             case 'd':
             {
                 i64 number = va_arg(args, i64);
-                write_dec_signed(&vga, number);
+                write_dec_signed(number);
                 break;
             }
                     
             case 'u':
             {
                 u64 number = va_arg(args, u64);
-                write_dec_unsigned(&vga, number);
+                write_dec_unsigned(number);
                 break;
             }
 
             case 'x':
             {
                 u64 number = va_arg(args, u64);
-                write_hex(&vga, number, false, true);
+                write_hex(number, false, true);
                 break;
             }
 
             case 'X':
             {
                 u64 number = va_arg(args, u64);
-                write_hex(&vga, number, true, true);
+                write_hex(number, true, true);
                 break;
             }
 
             case 's':
             {
                 char* str = va_arg(args, char*);
-                write_string(&vga, str);
+                write_string(str);
                 break;
             }
 
             case 'c':
-                write_char(&vga, (char)va_arg(args, int));
+                write_char((char)va_arg(args, int));
                 break;
 
             case 'Z': // color set
-                vga.color = (char)va_arg(args, int);
+                global_vga_buffer.color = (char)va_arg(args, int);
                 break;
             case 'z': // color reset
-                vga.color = default_color;
+                global_vga_buffer.color = default_vga_color;
                 break;
                 
             default:
-                write_char(&vga, '%');
+                write_char('%');
                 --format;
                 break;
         }

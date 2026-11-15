@@ -16,11 +16,14 @@ typedef struct
     char color;
 }Vga_buffer;
 
-void clear_screen(Vga_buffer*);
-void write_char(Vga_buffer*, const char);
-void write_string(Vga_buffer*, const char* text);
-void write_hex(Vga_buffer*, u64 number, bool digit_uppercase, bool strip);
-void write_dec_unsigned(Vga_buffer* buffer, u64 number);
-void write_dec_signed(Vga_buffer* buffer, i64 number);
+extern Vga_buffer global_vga_buffer;
+extern const char default_vga_color;
+
+void clear_screen();
+void write_char(const char c);
+void write_string(const char* text);
+void write_hex(u64 number, bool digit_uppercase, bool strip);
+void write_dec_unsigned(u64 number);
+void write_dec_signed(i64 number);
 
 #endif // VGA_H
