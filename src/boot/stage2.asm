@@ -16,6 +16,7 @@ KERNEL_BUFFER_SECTORS 		equ 64
 ;   KERNEL_MEMORY_SIZE
 ;	STACK_BASE
 ;	STACK_LIMIT
+;   KERNEL_ENTRY_POINT
 
 KERNEL_BLOB_ADDRESS equ (KERNEL_TEXT_ADDR + KERNEL_MEMORY_SIZE)
 
@@ -368,8 +369,7 @@ set_kernel_mem_info:
     mov rdi, kernel_mem_info
 
 jump_to_kernel:
-	mov rax, KERNEL_TEXT_ADDR
-	call rax									; Finally jump to the kernel.
+	call KERNEL_ENTRY_POINT
 
 	; The CPU should never reach here.
 	jmp $

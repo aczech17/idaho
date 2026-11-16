@@ -215,6 +215,8 @@ def write_kernel_layout(kernel_path):
     kernel_memory_end = parse_kernel_map("__kernel_end")
     kernel_memory_size = kernel_memory_end - text_addr
 
+    kernel_entry_point = parse_kernel_map("kernel_main")
+
     with open(mem_layout_path, 'w') as f:
         f.write(f"KERNEL_FILE_SIZE equ 0x{kernel_file_size:X}\n")
         f.write(f"KERNEL_BLOB_SECTORS equ 0x{kernel_sectors:X}\n")
@@ -222,6 +224,7 @@ def write_kernel_layout(kernel_path):
         f.write(f"KERNEL_MEMORY_SIZE equ 0x{kernel_memory_size:X}\n")
         f.write(f"STACK_BASE equ 0x{stack_base:X}\n")
         f.write(f"STACK_LIMIT equ 0x{stack_limit:X}\n")
+        f.write(f"KERNEL_ENTRY_POINT equ 0x{kernel_entry_point:X}\n")
 
 def assemble_bootloader_stage(source, output):
     try:
