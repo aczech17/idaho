@@ -159,7 +159,7 @@ def compile_kernel(
 ):
     compile_command = [
     "clang",
-    "--target=x86_64-unknown-none-none",
+    "--target=x86_64-unknown-none-elf",
     "-mabi=sysv",
     "-fuse-ld=lld",
     "-std=c11",
