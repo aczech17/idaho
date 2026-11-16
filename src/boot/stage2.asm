@@ -369,7 +369,8 @@ set_kernel_mem_info:
     mov rdi, kernel_mem_info
 
 jump_to_kernel:
-	call KERNEL_ENTRY_POINT
+	mov rax, KERNEL_ENTRY_POINT
+	call rax
 
 	; The CPU should never reach here.
 	jmp $
