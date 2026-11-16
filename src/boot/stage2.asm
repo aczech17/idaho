@@ -10,6 +10,7 @@ KERNEL_BUFFER_SECTORS 		equ 64
 
 %include "out/mem_layout.inc"
 ; After include we've got:
+;	KERNEL_FILE_SIZE
 ;	KERNEL_BLOB_SECTORS
 ;	STACK_BASE
 ;	STACK_LIMIT
@@ -315,48 +316,16 @@ enable_floating_point:
     ldmxcsr [abs default_mxcsr]
 
 parse_kernel:
-	mov rsi, [abs KERNEL_BLOB_ADDRESS + 0x20]		; Load e_phof - start of the program header table.
-	add rsi, KERNEL_BLOB_ADDRESS						; Now in RSI we have the memory address of e_phof.
-
-	movzx ecx, word [abs KERNEL_BLOB_ADDRESS + 0x38]	; Load e_phnum -- the number of entries in the program header table.
-
-	cld			; Clear direction flag for future rep movsb.
-.ph_loop:
-	mov eax, [rsi + 0]	; ph_type
-	cmp eax, 1			; Check if PT_LOAD, if not then ignore.
-	jne .next
-	
-	mov r8,  [rsi + 0x08] 	; p_offset
-	mov r9,  [rsi + 0x10]	; p_vaddr -- address of the segment
-	mov r10, [rsi + 0x20]	; p_filesz -- size of the segment in the kernel file
-	mov r11, [rsi + 0x28]	; p_memsz  -- size of the segment in memory
-
-
-	; Save registers (RSI and RCX)
-	mov rbp, rsi
-	mov r15, rcx
-
-	; zero memory
-	mov rdi, r9		; set destination address (p_vaddr)
-	mov rcx, r11	; set segment size (p_memsz)
-	mov al, 0		; value is 0
+	cld
+	mov rdi, KERNEL_TEXT_ADDR
+	mov rax, 0
+	mov rcx, KERNEL_MEMORY_SIZE
 	rep stosb
 
-	; load ELF section to memory
-	lea rsi, [abs KERNEL_BLOB_ADDRESS + r8d]	; source (kernel start + p_offset)
-	mov rdi, r9							; destination  (p_vaddr)
-	mov rcx, r10					; count of bytes (p_filesz)
+	mov rsi, KERNEL_BLOB_ADDRESS
+	mov rdi, KERNEL_TEXT_ADDR
+	mov rcx, KERNEL_FILE_SIZE
 	rep movsb
-
-	; Restore registers (RCX and RSI)
-	mov rcx, r15
-	mov rsi, rbp	
-
-.next:
-	add rsi, 0x38	; 0x38 -- program header size
-	dec rcx
-	jnz .ph_loop
-
 
 set_up_stack:
     mov rbp, STACK_BASE
@@ -368,8 +337,9 @@ set_kernel_mem_info:
     mov qword [abs kernel_mem_info.mem_map_address], rax
 
     ; Program header table address (u64)
-    mov rax, [abs KERNEL_BLOB_ADDRESS + 0x20]
-    add rax, KERNEL_BLOB_ADDRESS
+    ; mov rax, [abs KERNEL_BLOB_ADDRESS + 0x20]
+    ; add rax, KERNEL_BLOB_ADDRESS
+    mov rax, 0
     mov qword [abs kernel_mem_info.ph_address], rax
 
     ; Stack base (u64)
@@ -390,7 +360,8 @@ set_kernel_mem_info:
     mov [abs kernel_mem_info.mem_map_count], eax
 
     ; Program header entry count (u16)
-    mov ax, [abs KERNEL_BLOB_ADDRESS + 0x38]	; e_phnum -- numer of ph entries.
+    ;mov ax, [abs KERNEL_BLOB_ADDRESS + 0x38]	; e_phnum -- numer of ph entries.
+    mov rax, 0
     mov [abs kernel_mem_info.ph_entry_count], ax
 
     ; GDT size (u16)
@@ -400,7 +371,7 @@ set_kernel_mem_info:
     mov rdi, kernel_mem_info
 
 jump_to_kernel:
-	mov rax, [abs KERNEL_BLOB_ADDRESS + 0x18]   ; e_entry -- entry point
+	mov rax, KERNEL_TEXT_ADDR
 	call rax									; Finally jump to the kernel.
 
 	; The CPU should never reach here.

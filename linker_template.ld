@@ -23,4 +23,13 @@ SECTIONS
     {
         *(.data)
     } :data
+
+    .bss :
+    {
+        *(COMMON)
+        *(.bss)
+        *(.bss.*)
+    }
+
+    __kernel_end = .;
 }

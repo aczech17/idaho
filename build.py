@@ -158,28 +158,30 @@ def compile_kernel(
         output,
 ):
     compile_command = [
-        "clang",
-        "--target=x86_64-unknown-none-elf",
-        "-mabi=sysv",
-        "-fuse-ld=lld",
-        "-std=c11",
-        "-ffreestanding",
-        "-fno-pie",
-        "-fno-pic",
-        "-fno-stack-protector",
-        "-fno-asynchronous-unwind-tables",
-        "-mno-red-zone",
-        "-nostdlib",
-        "-static",
-        "-Wall",
-        "-Wextra",
-        "-Wpedantic",
-        "-s",
-        *c_source_files,
-        *asm_objects,
-        "-T", linker_script_path,
-        "-o", output
-    ]
+    "clang",
+    "--target=x86_64-unknown-none-none",
+    "-mabi=sysv",
+    "-fuse-ld=lld",
+    "-std=c11",
+    "-ffreestanding",
+    "-fno-pie",
+    "-fno-pic",
+    "-fno-stack-protector",
+    "-fno-asynchronous-unwind-tables",
+    "-mno-red-zone",
+    "-nostdlib",
+    "-static",
+    "-Wall",
+    "-Wextra",
+    "-Wpedantic",
+    "-s",
+    *c_source_files,
+    *asm_objects,
+    "-T", linker_script_path,
+    "-Wl,--oformat=binary",
+    "-Wl,-Map,out/kernel.map",
+    "-o", output
+]
 
     try:
         subprocess.run(compile_command, check=True)
@@ -196,50 +198,25 @@ def compile_kernel(
             f.write(b"\0" * padding)
 
 
-def determine_kernel_memory_size(kernel_path):
-    with open(kernel_path, "rb") as f:
-        elf = f.read()
+def determine_kernel_memory_size():
+    with open("out/kernel.map", "r") as f:
+        for line in f:
+            if "__kernel_end" in line:
+                kernel_end = int(line.split()[0], 16)
+                return kernel_end - text_addr
 
-    if elf[:4] != b"\x7fELF" or elf[4] != 2 or elf[5] != 1:
-        raise ValueError("Invalid ELF64 little-endian file.")
+    raise RuntimeError("Could not find __kernel_end in kernel.map")
 
-    ph_offset = struct.unpack_from("<Q", elf, 0x20)[0]
-    ph_entry_size = struct.unpack_from("<H", elf, 0x36)[0]
-    ph_count = struct.unpack_from("<H", elf, 0x38)[0]
-
-    kernel_end = text_addr
-
-    for i in range(ph_count):
-        offset = ph_offset + i * ph_entry_size
-
-        if offset + 56 > len(elf) or ph_entry_size < 56:
-            raise ValueError("Invalid ELF program header.")
-
-        ph_type, _, _, p_vaddr, _, _, p_memsz, _ = struct.unpack_from(
-            "<IIQQQQQQ", elf, offset
-        )
-
-        if ph_type != 1 or p_memsz == 0:  # PT_LOAD
-            continue
-
-        segment_end = p_vaddr + p_memsz
-
-        if segment_end > kernel_end:
-            kernel_end = segment_end
-
-    # Round up to 4096-byte boundary.
-    kernel_end = (kernel_end + 4095) & ~4095
-
-    return kernel_end - text_addr
 
 
 def write_kernel_layout(kernel_path):
     kernel_size = os.path.getsize(kernel_path)
     kernel_sectors = (kernel_size + 511) // 512
 
-    kernel_memory_size = determine_kernel_memory_size(kernel_path)
+    kernel_memory_size = determine_kernel_memory_size()
 
     with open(mem_layout_path, 'w') as f:
+        f.write(f"KERNEL_FILE_SIZE equ 0x{kernel_size:X}\n")
         f.write(f"KERNEL_BLOB_SECTORS equ 0x{kernel_sectors:X}\n")
         f.write(f"STACK_BASE equ 0x{stack_base:X}\n")
         f.write(f"STACK_LIMIT equ 0x{stack_limit:X}\n")
@@ -263,7 +240,7 @@ def write_stage2_sectors_count(stage2_path):
 
 def create_disk_image():
     with open(os_image_path, "wb") as img_file:
-        for filename in ["out/bootloader_stage1.bin", "out/bootloader_stage2.bin", "out/kernel.elf"]:
+        for filename in ["out/bootloader_stage1.bin", "out/bootloader_stage2.bin", "out/kernel.bin"]:
             with open(filename, "rb") as f:
                 img_file.write(f.read())
 
@@ -283,10 +260,10 @@ def build():
     asm_objects = [path[1] for path in kernel_asm_sources_and_outputs]
 
     print("Compiling kernel... ", end="")
-    compile_kernel(kernel_c_sources, asm_objects , linker_script_path, 'out/kernel.elf')
-    print("Compiled to out/kernel.elf")
+    compile_kernel(kernel_c_sources, asm_objects , linker_script_path, 'out/kernel.bin')
+    print("Compiled to out/kernel.bin")
 
-    write_kernel_layout('out/kernel.elf')
+    write_kernel_layout('out/kernel.bin')
 
     print("Assembling bootloader stage 2... ", end="")
     assemble_bootloader_stage(bootloader_sources[1], 'out/bootloader_stage2.bin')
