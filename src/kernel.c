@@ -10,7 +10,7 @@ Frame_allocator global_frame_allocator;
 
 static void print_memory_map(const Phys_memory_map* memory_regions, const char* name)
 {
-    // vga_printf("%Z%s:%z\n", 0x09 ,name);
+    vga_printf("%Z%s:%z\n", 0x09 ,name);
     u64 total_memory_available = 0;
     for (u32 i = 0; i < memory_regions->region_count; ++i)
     {
@@ -50,19 +50,13 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     setup_idt(idt);
     vga_printf("IDT set up.%z\n");
 
+
     vga_printf("\nTrying to provoke page fault.\n");
     volatile u8* addr = (u8*)(1 << 31);
     *addr = 0x37;
 
     vga_printf("%Z\nval=%X\nOK%z\n", 0x2F, *addr);
 
-    vga_printf("fp test:\n");
-    double a = 2.5;
-    double b = 3.5;
-    double c = a + b;
-
-    u64 cc = *(u64*)(&c);
-    vga_printf("cc=%X\n", cc);
 
     for (;;);
 }

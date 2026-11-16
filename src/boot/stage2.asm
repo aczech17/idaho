@@ -12,10 +12,10 @@ KERNEL_BUFFER_SECTORS 		equ 64
 ; After include we've got:
 ;	KERNEL_FILE_SIZE
 ;	KERNEL_BLOB_SECTORS
-;	STACK_BASE
-;	STACK_LIMIT
 ;	KERNEL_TEXT_ADDR
 ;   KERNEL_MEMORY_SIZE
+;	STACK_BASE
+;	STACK_LIMIT
 
 KERNEL_BLOB_ADDRESS equ (KERNEL_TEXT_ADDR + KERNEL_MEMORY_SIZE)
 
@@ -336,11 +336,13 @@ set_kernel_mem_info:
     mov rax, memory_sections.entries
     mov qword [abs kernel_mem_info.mem_map_address], rax
 
-    ; Program header table address (u64)
-    ; mov rax, [abs KERNEL_BLOB_ADDRESS + 0x20]
-    ; add rax, KERNEL_BLOB_ADDRESS
-    mov rax, 0
-    mov qword [abs kernel_mem_info.ph_address], rax
+    ; kernel image address (u64)
+    mov rax, KERNEL_TEXT_ADDR
+    mov qword [abs kernel_mem_info.kernel_image_address], rax
+
+    ; kernel memory size (u64)
+    mov rax, KERNEL_MEMORY_SIZE
+    mov qword [abs kernel_mem_info.kernel_memory_size], rax
 
     ; Stack base (u64)
     mov qword [abs kernel_mem_info.stack_base], STACK_BASE
@@ -358,11 +360,6 @@ set_kernel_mem_info:
     ; Memory map count (u32)
     mov eax, [abs memory_sections.count]
     mov [abs kernel_mem_info.mem_map_count], eax
-
-    ; Program header entry count (u16)
-    ;mov ax, [abs KERNEL_BLOB_ADDRESS + 0x38]	; e_phnum -- numer of ph entries.
-    mov rax, 0
-    mov [abs kernel_mem_info.ph_entry_count], ax
 
     ; GDT size (u16)
     mov word [abs kernel_mem_info.gdt_size], (gdt_64.end - gdt_64)
@@ -487,7 +484,8 @@ default_mxcsr:
     dd 0x1F80
 
 ; u64 mem_map_address;
-; u64 ph_address;
+; u64 kernel_image_address;
+; u64 kernel_memory_size;
 ; u64 stack_base;
 ; u64 stack_limit;
 ; u64 gdt_address;
@@ -495,12 +493,14 @@ default_mxcsr:
 
 ; u32 mem_map_count;
 
-; u16 ph_entry_count;
 ; u16 gdt_size;
+
 kernel_mem_info:
 .mem_map_address:
     dq 0
-.ph_address:
+.kernel_image_address:
+    dq 0
+.kernel_memory_size:
     dq 0
 .stack_base:
     dq 0
@@ -512,8 +512,6 @@ kernel_mem_info:
     dq 0
 .mem_map_count:
     dd 0
-.ph_entry_count:
-    dw 0
 .gdt_size:
     dw 0
 

@@ -1,11 +1,5 @@
 ENTRY(kernel_main)
 
-PHDRS
-{
-    text PT_LOAD FLAGS(5);  /* R-X */
-    data PT_LOAD FLAGS(6);  /* RW- */
-}
-
 SECTIONS
 {
     . = TEXT_ADDR;

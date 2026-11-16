@@ -189,7 +189,7 @@ def compile_kernel(
         print_red("Error compiling kernel.")
         sys.exit(1)
 
-     # Pad kernel ELF to full sectors
+     # Pad kernel to full sectors
     size = os.path.getsize(output)
     padding = (-size) % 512
 
@@ -198,30 +198,30 @@ def compile_kernel(
             f.write(b"\0" * padding)
 
 
-def determine_kernel_memory_size():
+def parse_kernel_map(symbol_name):
     with open("out/kernel.map", "r") as f:
         for line in f:
-            if "__kernel_end" in line:
-                kernel_end = int(line.split()[0], 16)
-                return kernel_end - text_addr
+            if symbol_name in line:
+                value = int(line.split()[0], 16)
+                return value
 
-    raise RuntimeError("Could not find __kernel_end in kernel.map")
-
+    raise RuntimeError(f"Could not find {symbol_name} in kernel map.")
 
 
 def write_kernel_layout(kernel_path):
-    kernel_size = os.path.getsize(kernel_path)
-    kernel_sectors = (kernel_size + 511) // 512
+    kernel_file_size = os.path.getsize(kernel_path)
+    kernel_sectors = (kernel_file_size + 511) // 512
 
-    kernel_memory_size = determine_kernel_memory_size()
+    kernel_memory_end = parse_kernel_map("__kernel_end")
+    kernel_memory_size = kernel_memory_end - text_addr
 
     with open(mem_layout_path, 'w') as f:
-        f.write(f"KERNEL_FILE_SIZE equ 0x{kernel_size:X}\n")
+        f.write(f"KERNEL_FILE_SIZE equ 0x{kernel_file_size:X}\n")
         f.write(f"KERNEL_BLOB_SECTORS equ 0x{kernel_sectors:X}\n")
-        f.write(f"STACK_BASE equ 0x{stack_base:X}\n")
-        f.write(f"STACK_LIMIT equ 0x{stack_limit:X}\n")
         f.write(f"KERNEL_TEXT_ADDR equ 0x{text_addr:X}\n")
         f.write(f"KERNEL_MEMORY_SIZE equ 0x{kernel_memory_size:X}\n")
+        f.write(f"STACK_BASE equ 0x{stack_base:X}\n")
+        f.write(f"STACK_LIMIT equ 0x{stack_limit:X}\n")
 
 def assemble_bootloader_stage(source, output):
     try:

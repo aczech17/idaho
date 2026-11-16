@@ -8,21 +8,9 @@
 
 typedef struct
 {
-    /*
-     memory map address            (u64)
-     memory map count              (u32)
-     program header address        (u64)
-     program header entry count    (u16)
-     stack base                    (u64)
-     stack limit                   (u64)
-     gdt address				   (u64)
-     gdt size					   (u16)
-*/
-
-    // We sort it by size descending to reduce padding.
-
     u64 mem_map_address;
-    u64 ph_address;
+    u64 kernel_image_address;
+    u64 kernel_memory_size;
     u64 stack_base;
     u64 stack_limit;
     u64 gdt_address;
@@ -30,7 +18,6 @@ typedef struct
 
     u32 mem_map_count;
 
-    u16 ph_entry_count;
     u16 gdt_size;
 }Kernel_mem_info;
 
