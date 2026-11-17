@@ -3,6 +3,7 @@
 #include "memory/page_table.h"
 #include "interrupt/idt.h"
 #include "vga.h"
+#include "io/xhci.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -32,30 +33,50 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     clear_screen();
     vga_printf("%ZModern OS. Witamy!\n%z\n", 0x1F);
 
+
+
+
+
     Phys_memory_map phys_memory_regions;
     determine_available_phys_addresses(&phys_memory_regions, kernel_mem_info, LOW_MEM_SIZE);
 
     Phys_memory_map kernel_regions;
     register_kernel_regions(&kernel_regions, kernel_mem_info);
 
-    print_memory_map(&phys_memory_regions, "available memory");
-    print_memory_map(&kernel_regions, "kernel memory");
+    // print_memory_map(&phys_memory_regions, "available memory");
+    // print_memory_map(&kernel_regions, "kernel memory");
 
 
     setup_frame_allocator(&global_frame_allocator, &phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
 
     global_page_table = (Page_table*)(kernel_mem_info->page_table_address);
-    vga_printf("\nPage table at %X\n", global_page_table);
+    // vga_printf("\nPage table at %X\n", global_page_table);
 
     setup_idt(idt);
     vga_printf("IDT set up.%z\n");
 
+    XHCI_Info xhci_info = find_xhci_info();
+    if (!xhci_info.found)
+    {
+        panic("Could not find XHCI info.");
+    }
+    enable_xhci_memory_space(&xhci_info);
 
-    vga_printf("\nTrying to provoke page fault.\n");
-    volatile u8* addr = (u8*)(1 << 31);
-    *addr = 0x37;
+    u64 mmio_addr = get_mmio_xhci_address(&xhci_info);
+    vga_printf("mmio_addr=%X\n", mmio_addr);
 
-    vga_printf("%Z\nval=%X\nOK%z\n", 0x2F, *addr);
+    Virt_addr mmio_page_addr = mmio_addr & ~0xFFFULL;
+    map_address(mmio_page_addr, (Phys_addr)mmio_page_addr, PTE_WRITABLE | PTE_CACHE_DISABLE);
+
+
+    u32 value = *(u32*)(mmio_addr);
+    vga_printf("value = %X\n", value);
+
+    // vga_printf("\nTrying to provoke page fault.\n");
+    // volatile u8* addr = (u8*)(1 << 31);
+    // *addr = 0x37;
+    //
+    // vga_printf("%Z\nval=%X\nOK%z\n", 0x2F, *addr);
 
 
     for (;;);

@@ -16,7 +16,7 @@ kernel_asm_sources_and_outputs = [
 ]
 kernel_c_sources = ['src/kernel.c', 'src/vga.c', 'src/common.c', 'src/memory/phys_memory_map.c', 'src/memory/frame_allocator.c',
                   'src/memory/page_table.c',
-                  'src/interrupt/handlers.c', 'src/interrupt/idt.c']
+                  'src/interrupt/handlers.c', 'src/interrupt/idt.c', 'src/io/xhci.c']
 linker_script_template = 'linker_template.ld'
 mem_layout_path = 'out/mem_layout.inc'
 
@@ -289,7 +289,8 @@ def qemu_run(qemu_memory_size, use_curses):
     qemu_command = [
     'qemu-system-x86_64',
     '-drive', f'format=raw,file={os_image_path}',
-    '-m', qemu_memory_size
+    '-m', qemu_memory_size,
+    '-device', 'qemu-xhci'
     ]
 
     if use_curses:

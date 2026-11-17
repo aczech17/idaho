@@ -14,10 +14,10 @@
       "-Wextra",
       "src/kernel.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/vga.c",
@@ -34,10 +34,10 @@
       "-Wextra",
       "src/vga.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/common.c",
@@ -54,10 +54,10 @@
       "-Wextra",
       "src/common.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/memory/phys_memory_map.c",
@@ -74,10 +74,10 @@
       "-Wextra",
       "src/memory/phys_memory_map.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/memory/frame_allocator.c",
@@ -94,10 +94,10 @@
       "-Wextra",
       "src/memory/frame_allocator.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/memory/page_table.c",
@@ -114,10 +114,10 @@
       "-Wextra",
       "src/memory/page_table.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/interrupt/handlers.c",
@@ -134,10 +134,10 @@
       "-Wextra",
       "src/interrupt/handlers.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
   },
   {
     "file": "src/interrupt/idt.c",
@@ -154,9 +154,29 @@
       "-Wextra",
       "src/interrupt/idt.c",
       "-o",
-      "out/kernel.elf"
+      "out/kernel.bin"
     ],
     "directory": "/home/tytjan/Programowanie/modern_os",
-    "output": "out/kernel.elf"
+    "output": "out/kernel.bin"
+  },
+  {
+    "file": "src/io/xhci.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-std=c11",
+      "-ffreestanding",
+      "-fno-pie",
+      "-fno-pic",
+      "-fno-stack-protector",
+      "-fno-asynchronous-unwind-tables",
+      "-mno-red-zone",
+      "-Wall",
+      "-Wextra",
+      "src/interrupt/idt.c",
+      "-o",
+      "out/kernel.bin"
+    ],
+    "directory": "/home/tytjan/Programowanie/modern_os",
+    "output": "out/kernel.bin"
   }
 ]
