@@ -7,11 +7,16 @@
 
 typedef struct
 {
+	bool found;
+
 	u8 bus;
 	u8 device;
 	u8 function;
-	bool found;
 	u64 mmio_addr;
+	u8 max_slots;
+	u16 max_interrupters;
+	u8 max_ports;
+	u32 scratchpad_count;
 }XHCI_Info;
 
 u32 pci_read_config(u8 bus, u8 device, u8 function, u8 offset);

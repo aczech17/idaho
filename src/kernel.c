@@ -56,11 +56,33 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     vga_printf("\nIDT set up.%z\n");
 
     XHCI_Info xhci_info = setup_xhci();
+	if (!xhci_info.found)
+	{
+		panic("Could not find XHCI config.");
+	}
+
     vga_printf("XHCI set up.\n\n");
 
+    /*
+	    u8 bus;
+		u8 device;
+		u8 function;
+		u64 mmio_addr;
+		u8 max_slots;
+		u16 max_interrupters;
+		u8 max_ports;
+		u32 scratchpad_count
+     */
+
     vga_printf("XHCI info:\n");
-    vga_printf("bus:%X\ndevice:%X\nfunction:%X\naddress:%X\n",
-        xhci_info.bus, xhci_info.device, xhci_info.function, xhci_info.mmio_addr);
+	vga_printf("bus = %X\n", xhci_info.bus);
+	vga_printf("device = %X\n", xhci_info.device);
+	vga_printf("function = %X\n", xhci_info.function);
+	vga_printf("mmio_addr = %X\n", xhci_info.mmio_addr);
+	vga_printf("max_slots = %X\n", xhci_info.max_slots);
+	vga_printf("max_interruputers = %X\n", xhci_info.max_interrupters);
+	vga_printf("max_ports = %X\n", xhci_info.max_ports);
+	vga_printf("scratchpad_count = %X\n", xhci_info.scratchpad_count);
 
     // vga_printf("\nTrying to provoke page fault.\n");
     // volatile u8* addr = (u8*)(1 << 31);
