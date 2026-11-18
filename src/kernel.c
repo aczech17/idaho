@@ -31,7 +31,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 
     disable_bios_cursor();
     clear_screen();
-    vga_printf("%ZModern OS. Witamy!\n%z\n", 0x1F);
+    vga_printf("%ZIdaho OS. Witamy!\n%z\n", 0x1F);
 
 
 
