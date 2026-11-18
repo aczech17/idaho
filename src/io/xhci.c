@@ -1,6 +1,6 @@
 #include "xhci.h"
-#include "../memory/memory.h"
 #include "../memory/page_table.h"
+#include "../memory/bump_allocator.h"
 
 static XHCI_Info find_xhci_info(void)
 {
@@ -33,14 +33,45 @@ static XHCI_Info find_xhci_info(void)
 	return xhci_info;
 }
 
+static u64 get_mmio_xhci_size(const XHCI_Info* info)
+{
+	u32 bar0 = pci_read_config(info->bus, info->device, info->function, 0x10);
+	u32 bar1 = pci_read_config(info->bus, info->device, info->function, 0x14);
+
+	u32 command_status = pci_read_config(info->bus, info->device, info->function, 0x04);
+	u16 command = command_status & 0xFFFF;
+
+	// Reset memory space enable for bar measure.
+	pci_write_config_16_bit(info->bus, info->device, info->function, 0x04, command & ~(1 << 1));
+
+	// Write ones to BAR
+	pci_write_config_32_bit(info->bus, info->device, info->function, 0x10, 0xFFFFFFFF);
+	pci_write_config_32_bit(info->bus, info->device, info->function, 0x14, 0xFFFFFFFF);
+
+	u32 bar0_mask = pci_read_config(info->bus, info->device, info->function, 0x10);
+	u32 bar1_mask = pci_read_config(info->bus, info->device, info->function, 0x14);
+
+	// Restore original BAR
+	pci_write_config_32_bit(info->bus, info->device, info->function, 0x10, bar0);
+	pci_write_config_32_bit(info->bus, info->device, info->function, 0x14, bar1);
+
+	// Restore command register
+	pci_write_config_16_bit(info->bus, info->device, info->function, 0x04, command);
+
+	u64 address_mask = (((u64)bar1_mask) << 32) | (bar0_mask & 0xFFFFFFF0U);
+	u64 size = ~address_mask + 1;
+
+	return size;
+}
+
 static void enable_xhci_memory_space(const XHCI_Info* info)
 {
 	u32 command_status = pci_read_config(info->bus, info->device, info->function, 0x04);
 
 	u16 command = command_status & 0xFFFF;
-	command |= 1;
+	command |= (1 << 1);
 
-	pci_write_config(info->bus, info->device, info->function, 0x04, command);
+	pci_write_config_16_bit(info->bus, info->device, info->function, 0x04, command);
 }
 
 static u64 get_mmio_xhci_address(const XHCI_Info* info)
@@ -54,9 +85,9 @@ static u64 get_mmio_xhci_address(const XHCI_Info* info)
 	return mmio_addr;
 }
 
-static void take_ownership(const u32 mmio_addr)
+static void take_ownership(const u64 mmio_addr)
 {
-	u32* regs = (u32*)mmio_addr;
+	volatile u32* regs = (u32*)mmio_addr;
 
 	u32 hccparams1 = regs[4];
 	u32 xecp = ((hccparams1 >> 16) & 0xFFFF);
@@ -75,9 +106,6 @@ static void take_ownership(const u32 mmio_addr)
 
 			// Wait until the BIOS releases the controller.
 			while (((*header_pointer) & (1U << 16)) != 0) {}
-
-			vga_printf("ownership taken\n");
-
 			break;
 		}
 
@@ -86,7 +114,7 @@ static void take_ownership(const u32 mmio_addr)
 	}
 }
 
-static void stop(const u32 mmio_addr)
+static void stop(const u64 mmio_addr)
 {
 	volatile u32* regs = (u32*)(mmio_addr);
 	u32 operational_offset = regs[0] & 0xFF;
@@ -98,11 +126,9 @@ static void stop(const u32 mmio_addr)
 	*usbcmd &= ~1U;
 
 	while (((*usbsts) & 1U) == 0) {}
-
-	vga_printf("controller stopped\n");
 }
 
-static void restart(const u32 mmio_addr)
+static void restart(const u64 mmio_addr)
 {
 	volatile u32* regs = (u32*)(mmio_addr);
 	u32 operational_offset = regs[0] & 0xFF;
@@ -113,10 +139,56 @@ static void restart(const u32 mmio_addr)
 
 	*usbcmd |= (1U << 1);
 
-	while (((*usbsts) & (1U << 1)) != 0) {} // host controller reset (HCRST)
+	while (((*usbcmd) & (1U << 1)) != 0) {} // host controller reset (HCRST)
 	while (((*usbsts) & (1U << 11)) != 0) {} // controller not ready (CNR)
+}
 
-	vga_printf("controller restarted\n");
+static void set_up_scratchpad(XHCI_Info* info, u64 max_frame_number)
+{
+	volatile u32* regs = (u32*)(info->mmio_addr);
+	u32 operational_offset = regs[0] & 0xFF;
+
+	volatile u32* op_regs = (u32*)(info->mmio_addr + operational_offset);
+	u32 page_size = op_regs[2];
+
+	if (!(page_size & 1))
+		panic("xHCI does not support 4 KiB pages.");
+
+	u64 scratchpad_array_size = info->scratchpad_count * 8;
+	u64 scratchpad_array_page_count = (scratchpad_array_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+	Phys_addr scratchpad_start_frame_phys_addr =
+		allocate_contiguous_general_frames(&global_frame_allocator, scratchpad_array_page_count, max_frame_number);
+	Virt_addr scratchpad_start_page_virt_addr = bump_allocate_pages(scratchpad_array_page_count);
+
+
+	u64 page_addr = scratchpad_start_page_virt_addr;
+	u64 frame_addr = scratchpad_start_frame_phys_addr;
+	for (u64 i = 0; i < scratchpad_array_page_count; ++i)
+	{
+		map_address(page_addr, frame_addr, PTE_WRITABLE);
+
+		page_addr += FRAME_SIZE;
+		frame_addr += FRAME_SIZE;
+	}
+
+	memset((void*)scratchpad_start_page_virt_addr, 0, scratchpad_array_size);
+
+	*(u64*)(info->dcbaa_virt_addr) = scratchpad_start_frame_phys_addr;
+
+	info->scratchpad_virt_addr = scratchpad_start_page_virt_addr;
+
+	u32 n = info->scratchpad_count;
+	for (u32 i = 0; i < n; ++i)
+	{
+		Phys_addr phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, max_frame_number);
+		Virt_addr virt_addr = bump_allocate_pages(1);
+		map_address(virt_addr, phys_addr, PTE_WRITABLE);
+		memset((void*)virt_addr, 0, FRAME_SIZE);
+
+		u64* scratchpad_addresses = (u64*)(info->scratchpad_virt_addr);
+		scratchpad_addresses[i] = phys_addr;
+	}
 }
 
 XHCI_Info setup_xhci(void)
@@ -126,15 +198,28 @@ XHCI_Info setup_xhci(void)
 	{
 		panic("Could not find XHCI info.");
 	}
+
+	u64 mmio_size = get_mmio_xhci_size(&xhci_info);
 	enable_xhci_memory_space(&xhci_info);
 
 	u64 mmio_addr = get_mmio_xhci_address(&xhci_info);
 	xhci_info.mmio_addr = mmio_addr;
 
-	Virt_addr mmio_page_addr = mmio_addr & ~0xFFFULL;
-	map_address(mmio_page_addr, (Phys_addr)mmio_page_addr, PTE_WRITABLE | PTE_CACHE_DISABLE);
+	u64 mmio_page_addr = mmio_addr & ~(FRAME_SIZE - 1ULL);
+	u64 mmio_offset = mmio_addr - mmio_page_addr;
 
-	u32* xhci_regs = (u32*)(mmio_addr);
+	u64 mmio_page_count =
+		(mmio_offset + mmio_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+	for (u64 i = 0; i < mmio_page_count; ++i)
+	{
+		u64 page_addr = mmio_page_addr + i * FRAME_SIZE;
+
+		map_address(page_addr, (Phys_addr)page_addr,
+					PTE_WRITABLE | PTE_CACHE_DISABLE);
+	}
+
+	volatile u32* xhci_regs = (u32*)(mmio_addr);
 
 	u32 hcsparams1 = xhci_regs[1];
 
@@ -149,12 +234,38 @@ XHCI_Info setup_xhci(void)
 	stop(mmio_addr);
 	restart(mmio_addr);
 
+	u32 operational_offset = (*(volatile u32*)mmio_addr) & 0xFF;
+	volatile u32* config = (volatile u32*)(mmio_addr + operational_offset + 0x38);
+
+	u32 config_val = *config;
+	config_val = (config_val & ~0xFF) | xhci_info.max_slots;
+	*config = config_val;
+
 	u32 hccparams1 = xhci_regs[4];
 	bool supports_64bit_dma = (hccparams1 & 1) != 0;
-	u64 max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
+	u64 max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE * 8 - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
 
+	u64 dcbaa_size = (xhci_info.max_slots + 1) * 8;
 
+	Phys_addr dcbaa_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, max_frame_number);
+	if (dcbaa_phys_addr == INVALID_ADDR)
+		panic("Could not allocate mem for DCBAA.");
 
+	Virt_addr dcbaa_virt_addr = bump_allocate_pages(1);
+	map_address(dcbaa_virt_addr, dcbaa_phys_addr, PTE_WRITABLE);
+	memset((void*)dcbaa_virt_addr, 0, dcbaa_size);
+
+	xhci_info.dcbaa_virt_addr = dcbaa_virt_addr;
+
+	if (xhci_info.scratchpad_count > 0)
+		set_up_scratchpad(&xhci_info, max_frame_number);
+
+	u64 dcbaap_addr = mmio_addr + operational_offset + 0x30;
+
+	if (supports_64bit_dma)
+		*(volatile u64*)(dcbaap_addr) = dcbaa_phys_addr;
+	else
+		*(volatile u32*)(dcbaap_addr) = (u32)(dcbaa_phys_addr);
 
 	return xhci_info;
 }
