@@ -16,11 +16,11 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
-    "file": "src/vga.c",
+    "file": "src/vga/vga.c",
     "arguments": [
       "/usr/bin/gcc",
       "-std=c11",
@@ -36,7 +36,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -56,7 +56,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -76,7 +76,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -96,7 +96,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -116,7 +116,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -136,7 +136,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -156,7 +156,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   },
   {
@@ -176,7 +176,7 @@
       "-o",
       "out/kernel.bin"
     ],
-    "directory": "/home/tytjan/Programowanie/modern_os",
+    "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
   }
 ]

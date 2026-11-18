@@ -1,6 +1,6 @@
 #include "page_table.h"
 #include "../common.h"
-#include "common.h"
+#include "memory.h"
 
 
 /*

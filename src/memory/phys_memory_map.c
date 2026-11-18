@@ -1,5 +1,5 @@
 #include "phys_memory_map.h"
-#include "../vga.h"
+#include "../vga/vga.h"
 
 void determine_available_phys_addresses(Phys_memory_map* mmap, const Kernel_mem_info* kernel_mem_info, const Phys_addr low_mem_size)
 {

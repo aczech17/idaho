@@ -1,5 +1,5 @@
 #include "common.h"
-#include "vga.h"
+#include "vga/vga.h"
 #include <stdarg.h>
 
 size_t string_len(const char* text)

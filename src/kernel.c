@@ -2,7 +2,7 @@
 #include "memory/frame_allocator.h"
 #include "memory/page_table.h"
 #include "interrupt/idt.h"
-#include "vga.h"
+#include "vga/vga.h"
 #include "io/xhci.h"
 
 Page_table* global_page_table;

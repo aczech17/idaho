@@ -2,7 +2,7 @@
 #define MEM_ALLOCATOR_H
 
 #include "phys_memory_map.h"
-#include "common.h"
+#include "memory.h"
 
 /*
     max memory size = 32GiB

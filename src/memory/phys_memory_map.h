@@ -2,7 +2,7 @@
 #define PHYS_MEMORY_MAP_H
 
 #include "../common.h"
-#include "common.h"
+#include "memory.h"
 
 #define MAX_MEMORY_SECTIONS 128
 

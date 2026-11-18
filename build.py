@@ -10,11 +10,15 @@ build_tools = ["nasm", "clang", "lld"]
 emulation_tools = ["qemu-system-x86_64"]
 
 bootloader_sources = ['src/boot/stage1.asm', 'src/boot/stage2.asm']
+
 kernel_asm_sources_and_outputs = [
     ('src/interrupt/isr.asm', 'out/isr.o'),
-    ('src/asm_routines.asm', 'out/asm_routines.o')
+    ('src/io/io.asm', 'out/io.o'),
+    ('src/memory/memory.asm', 'out/memory.o'),
+    ('src/vga/vga.asm', 'out/vga.o')
 ]
-kernel_c_sources = ['src/kernel.c', 'src/vga.c', 'src/common.c', 'src/memory/phys_memory_map.c', 'src/memory/frame_allocator.c',
+
+kernel_c_sources = ['src/kernel.c', 'src/vga/vga.c', 'src/common.c', 'src/memory/phys_memory_map.c', 'src/memory/frame_allocator.c',
                   'src/memory/page_table.c',
                   'src/interrupt/handlers.c', 'src/interrupt/idt.c', 'src/io/xhci.c']
 linker_script_template = 'linker_template.ld'

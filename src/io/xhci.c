@@ -1,5 +1,5 @@
 #include "xhci.h"
-#include "../memory/common.h"
+#include "../memory/memory.h"
 #include "../memory/page_table.h"
 
 static XHCI_Info find_xhci_info(void)

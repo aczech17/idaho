@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "common.h"
+#include "../memory/memory.h"
 
 #define VGA_ADDRESS ((char*)(0xB8000))
 #define VGA_WIDTH 80
