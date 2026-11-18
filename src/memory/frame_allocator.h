@@ -32,6 +32,7 @@ void setup_frame_allocator
 );
 Frame_address allocate_kernel_frame(Frame_allocator* allocator);
 Frame_address allocate_general_frame(Frame_allocator* allocator);
+Frame_address allocate_contiguous_general_frames(Frame_allocator* allocator, u64 frames_count, u64 max_frame_number);
 void deallocate_frame(Frame_allocator* allocator, Frame_address frame_address);
 
 #endif // MEM_ALLOCATOR_H

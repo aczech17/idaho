@@ -125,6 +125,58 @@ Frame_address allocate_general_frame(Frame_allocator* allocator)
     return allocate_frame(allocator, false);
 }
 
+Frame_address allocate_contiguous_general_frames(Frame_allocator* allocator, u64 frames_count, u64 max_frame_number)
+{
+    // It's not so efficient.
+
+    if (frames_count == 0)
+        return INVALID_ADDR;
+
+    u64 first_frame = 0, last_frame = 0;
+    bool found = false;
+
+    for (u64 attempt = 0; attempt < FRAME_BITMAP_SIZE * 8; ++attempt)
+    {
+        u64 index = last_frame / 8;
+        u64 mask = 1 << (7 - (last_frame % 8));
+
+        if (last_frame > max_frame_number)
+            return INVALID_ADDR;
+
+        bool good_frame = (allocator->accessible[index] & mask) && !(allocator->kernel_space[index] & mask) &&
+            !(allocator->taken[index] & mask);
+
+        if (good_frame)
+        {
+            if (last_frame - first_frame + 1 == frames_count)
+            {
+                found = true;
+                allocator->latest_allocated_general_block = last_frame / 8;
+                break;
+            }
+            ++last_frame;
+        }
+        else
+        {
+            ++last_frame;
+            first_frame = last_frame;
+        }
+    }
+
+    if (!found)
+        return INVALID_ADDR;
+
+    for (u64 frame = first_frame; frame <= last_frame; ++frame)
+    {
+        u64 index = frame / 8;
+        u64 mask = 1 << (7 - (frame % 8));
+
+        allocator->taken[index] |= mask;
+    }
+
+    return first_frame * FRAME_SIZE;
+}
+
 void deallocate_frame(Frame_allocator* allocator, Frame_address frame_address)
 {
     u64 frame_number = frame_address / FRAME_SIZE;

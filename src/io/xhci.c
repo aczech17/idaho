@@ -54,7 +54,7 @@ static u64 get_mmio_xhci_address(const XHCI_Info* info)
 	return mmio_addr;
 }
 
-static void take_xhci_ownership(const u32 mmio_addr)
+static void take_ownership(const u32 mmio_addr)
 {
 	u32* regs = (u32*)mmio_addr;
 
@@ -63,7 +63,7 @@ static void take_xhci_ownership(const u32 mmio_addr)
 
 	u32 xecp_offset = xecp * 4;
 
-	while (xecp_offset !=0 )
+	while (xecp_offset !=0)
 	{
 		volatile u32* header_pointer = (u32*)(mmio_addr + xecp_offset);
 		u32 header = *header_pointer;
@@ -145,9 +145,16 @@ XHCI_Info setup_xhci(void)
 	u32 hcsparams2 = xhci_regs[2];
 	xhci_info.scratchpad_count = (((hcsparams2 >> 21) & 0x1F) << 5) | ((hcsparams2 >> 27) & 0x1F);
 
-	take_xhci_ownership(mmio_addr);
+	take_ownership(mmio_addr);
 	stop(mmio_addr);
 	restart(mmio_addr);
+
+	u32 hccparams1 = xhci_regs[4];
+	bool supports_64bit_dma = (hccparams1 & 1) != 0;
+	u64 max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
+
+
+
 
 	return xhci_info;
 }
