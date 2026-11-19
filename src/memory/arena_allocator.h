@@ -15,3 +15,4 @@ extern Arena_allocator xhci_driver_page_allocator;
 Virt_addr arena_allocate_pages(Arena_allocator* allocator, u64 page_count);
 
 #endif // MEMORY_ARENA_ALLOCATOR_H
+

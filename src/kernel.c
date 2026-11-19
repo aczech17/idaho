@@ -34,9 +34,6 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     vga_printf("%ZIdaho OS. Witamy!\n%z\n", 0x1F);
 
 
-
-
-
     Phys_memory_map phys_memory_regions;
     determine_available_phys_addresses(&phys_memory_regions, kernel_mem_info, LOW_MEM_SIZE);
 
@@ -50,7 +47,6 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     setup_frame_allocator(&phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
 
     global_page_table = (Page_table*)(kernel_mem_info->page_table_address);
-    // vga_printf("\nPage table at %X\n", global_page_table);
 
     setup_idt(idt);
     vga_printf("\nIDT set up.%z\n");
@@ -78,7 +74,10 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 		}
 
 		if (received_any)
+        {
 			update_event_ring_dequeue_pointer(&xhci_info);
+            break;
+        }
 	}
 
     for (;;);
