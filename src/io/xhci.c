@@ -69,7 +69,8 @@ static void enable_xhci_memory_space(const XHCI_Info* info)
 	u32 command_status = pci_read_config(info->bus, info->device, info->function, 0x04);
 
 	u16 command = command_status & 0xFFFF;
-	command |= (1 << 1);
+	command |= (1 << 1); // Set memory space enable bit
+	command |= (1 << 2);  // Set bus master enable bit
 
 	pci_write_config_16_bit(info->bus, info->device, info->function, 0x04, command);
 }
@@ -94,7 +95,10 @@ static void take_ownership(const u64 mmio_addr)
 
 	u32 xecp_offset = xecp * 4;
 
-	while (xecp_offset !=0)
+	if (xecp == 0)
+		return;
+
+	for (;;)
 	{
 		volatile u32* header_pointer = (u32*)(mmio_addr + xecp_offset);
 		u32 header = *header_pointer;
@@ -102,7 +106,7 @@ static void take_ownership(const u64 mmio_addr)
 		u8 capability_id = header & 0xFF;
 		if (capability_id == 1) // USB legacy support found
 		{
-			*header_pointer |= (1U << 24);
+			((volatile u8*)header_pointer)[3] |= 1U;
 
 			// Wait until the BIOS releases the controller.
 			while (((*header_pointer) & (1U << 16)) != 0) {}
@@ -110,7 +114,10 @@ static void take_ownership(const u64 mmio_addr)
 		}
 
 		u8 next_offset_pointer = (header >> 8) & 0xFF;
-		xecp_offset = next_offset_pointer * 4;
+		if (next_offset_pointer == 0)
+			break;
+
+		xecp_offset += next_offset_pointer * 4;
 	}
 }
 
@@ -175,7 +182,6 @@ static void set_up_scratchpad(XHCI_Info* info, u64 max_frame_number)
 	memset((void*)scratchpad_start_page_virt_addr, 0, scratchpad_array_size);
 
 	*(u64*)(info->dcbaa_virt_addr) = scratchpad_start_frame_phys_addr;
-
 	info->scratchpad_virt_addr = scratchpad_start_page_virt_addr;
 
 	u32 n = info->scratchpad_count;
@@ -221,32 +227,35 @@ XHCI_Info setup_xhci(void)
 
 	volatile u32* xhci_regs = (u32*)(mmio_addr);
 
+	u32 cap_length = xhci_regs[0] & 0xFF;
 	u32 hcsparams1 = xhci_regs[1];
+	u32 hcsparams2 = xhci_regs[2];
+	u32 hccparams1 = xhci_regs[4];
+
+	volatile u32* op_regs = (volatile u32*)(mmio_addr + cap_length);
+	volatile u32* config = &op_regs[14];
 
 	xhci_info.max_slots = hcsparams1 & 0xFF;
 	xhci_info.max_interrupters = (hcsparams1 >> 8) & 0x7FF;
 	xhci_info.max_ports = (hcsparams1 >> 24) & 0xFF;
-
-	u32 hcsparams2 = xhci_regs[2];
 	xhci_info.scratchpad_count = (((hcsparams2 >> 21) & 0x1F) << 5) | ((hcsparams2 >> 27) & 0x1F);
 
 	take_ownership(mmio_addr);
 	stop(mmio_addr);
 	restart(mmio_addr);
 
-	u32 operational_offset = (*(volatile u32*)mmio_addr) & 0xFF;
-	volatile u32* config = (volatile u32*)(mmio_addr + operational_offset + 0x38);
-
+	// set max slots shared with kernel to max value possible
 	u32 config_val = *config;
 	config_val = (config_val & ~0xFF) | xhci_info.max_slots;
 	*config = config_val;
 
-	u32 hccparams1 = xhci_regs[4];
 	bool supports_64bit_dma = (hccparams1 & 1) != 0;
 	u64 max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE * 8 - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
 
 	u64 dcbaa_size = (xhci_info.max_slots + 1) * 8;
 
+	// Allocate memory for DCBAA. DCBAA has maximum of 256 entries, that makes 256 * 8 = 2048 bytes.
+	// 2048 < 4096, so one page is enough.
 	Phys_addr dcbaa_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, max_frame_number);
 	if (dcbaa_phys_addr == INVALID_ADDR)
 		panic("Could not allocate mem for DCBAA.");
@@ -257,15 +266,16 @@ XHCI_Info setup_xhci(void)
 
 	xhci_info.dcbaa_virt_addr = dcbaa_virt_addr;
 
+
 	if (xhci_info.scratchpad_count > 0)
 		set_up_scratchpad(&xhci_info, max_frame_number);
 
-	u64 dcbaap_addr = mmio_addr + operational_offset + 0x30;
+	volatile u64* dcbaap = (volatile u64*)&op_regs[12];
 
 	if (supports_64bit_dma)
-		*(volatile u64*)(dcbaap_addr) = dcbaa_phys_addr;
+		*dcbaap = dcbaa_phys_addr;
 	else
-		*(volatile u32*)(dcbaap_addr) = (u32)(dcbaa_phys_addr);
+		*(volatile u32*)(dcbaap) = (u32)(dcbaa_phys_addr);
 
 	return xhci_info;
 }
