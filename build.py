@@ -291,10 +291,11 @@ def qemu_run(qemu_memory_size, use_curses):
     print(f"Running QEMU with {qemu_memory_size}iB of memory.")
 
     qemu_command = [
-    'qemu-system-x86_64',
-    '-drive', f'format=raw,file={os_image_path}',
-    '-m', qemu_memory_size,
-    '-device', 'qemu-xhci'
+        'qemu-system-x86_64',
+        '-drive', f'format=raw,file={os_image_path}',
+        '-m', qemu_memory_size,
+        '-device', 'qemu-xhci,id=xhci',
+        '-monitor', 'stdio'
     ]
 
     if use_curses:

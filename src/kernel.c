@@ -61,7 +61,24 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 		panic("Could not find XHCI config.");
 	}
 
+
     vga_printf("XHCI set up.\n\n");
+
+	u32 event[4];
+
+	while (1)
+	{
+		bool received_any = false;
+
+		while (read_event_trb(&xhci_info, event))
+		{
+			vga_printf("cos wykryto :D\n");
+			received_any = true;
+		}
+
+		if (received_any)
+			update_event_ring_dequeue_pointer(&xhci_info);
+	}
 
     for (;;);
 }
