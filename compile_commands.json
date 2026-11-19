@@ -180,7 +180,7 @@
     "output": "out/kernel.bin"
   },
   {
-    "file": "src/memory/bump_allocator.c",
+    "file": "src/memory/arena_allocator.c",
     "arguments": [
       "/usr/bin/gcc",
       "-std=c11",
