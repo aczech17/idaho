@@ -33,7 +33,8 @@ typedef struct
 	Phys_addr event_ring_phys_addr;
 
 	u64 trb_index;
-	u8 consumer_cycle_state;
+	bool consumer_cycle_state;
+	volatile u32* runtime_regs;
 }XHCI_Info;
 
 u32 pci_read_config(u8 bus, u8 device, u8 function, u8 offset);
@@ -41,5 +42,7 @@ void pci_write_config_16_bit(u8 bus, u8 device, u8 function, u8 offset, u16 valu
 void pci_write_config_32_bit(u8 bus, u8 device, u8 function, u8 offset, u32 value);
 
 XHCI_Info setup_xhci(void);
+bool read_event_trb(XHCI_Info*, u32 event_trb[4]);
+void update_event_ring_dequeue_pointer(XHCI_Info* info);
 
 #endif // IO_XHCI_H

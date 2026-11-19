@@ -274,11 +274,12 @@ static void set_up_event_ring(XHCI_Info* info)
 {
 	volatile u32* xhci_regs = (volatile u32*)(info->mmio_addr);
 	u32 rtsoff = xhci_regs[6] & ~0x1FU;
-	volatile u32* runtime_regs = (volatile u32*)(info->mmio_addr + rtsoff);
+	info->runtime_regs = (volatile u32*)(info->mmio_addr + rtsoff);
 
-	volatile u32* erstz = &runtime_regs[10];
-	volatile u64* erstba = (volatile u64*)&runtime_regs[12];
-	volatile u64* erdp = (volatile u64*)&runtime_regs[14]; // event ring deque pointer
+
+	volatile u32* erstz = &info->runtime_regs[10];
+	volatile u64* erstba = (volatile u64*)&info->runtime_regs[12];
+	volatile u64* erdp = (volatile u64*)&info->runtime_regs[14]; // event ring deque pointer
 
 	Phys_addr event_ring_phys_addr =
 		allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
@@ -309,12 +310,12 @@ static void set_up_event_ring(XHCI_Info* info)
 	}
 	else
 	{
-		runtime_regs[14] = (u32)event_ring_phys_addr;
-		runtime_regs[12] = (u32)phys_erst_address;
+		info->runtime_regs[14] = (u32)event_ring_phys_addr;
+		info->runtime_regs[12] = (u32)phys_erst_address;
 	}
 
 	info->trb_index = 0;
-	info->consumer_cycle_state = 1;
+	info->consumer_cycle_state = true;
 }
 
 XHCI_Info setup_xhci(void)
@@ -388,4 +389,35 @@ XHCI_Info setup_xhci(void)
 
 
 	return xhci_info;
+}
+
+bool read_event_trb(XHCI_Info* info, u32 event_trb[4])
+{
+	Virt_addr current_entry_addr = info->event_ring_virt_addr + info->trb_index * 16;
+	volatile u32* current_entry = (volatile u32*)(current_entry_addr);
+	bool cycle_bit = (current_entry[3] & 1) != 0;
+
+	if (cycle_bit != info->consumer_cycle_state)
+		return false;
+
+
+	for (u64 i = 0; i < 4; ++i)
+		event_trb[i] = current_entry[i];
+
+	++info->trb_index;
+	if (info->trb_index == 256)
+	{
+		info->trb_index = 0;
+		info->consumer_cycle_state = !info->consumer_cycle_state;
+	}
+
+	return true;
+}
+
+void update_event_ring_dequeue_pointer(XHCI_Info* info)
+{
+	Phys_addr dequeue_pointer = info->event_ring_phys_addr + info->trb_index * 16;
+
+	volatile u64* erdp = (volatile u64*)&info->runtime_regs[14];
+	*erdp = dequeue_pointer | (1 << 3);
 }
