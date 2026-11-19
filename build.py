@@ -289,6 +289,7 @@ def build():
 
 def qemu_run(qemu_memory_size, use_curses):
     print(f"Running QEMU with {qemu_memory_size}iB of memory.")
+    print("device_add usb-kbd,bus=xhci.0,id=kbd")
 
     qemu_command = [
         'qemu-system-x86_64',

@@ -153,7 +153,7 @@ static void restart(const XHCI_Info* info)
 static void allocate_additional_page(XHCI_Info* info)
 {
 	Phys_addr additional_frame =
-		allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+		allocate_contiguous_general_frames(1, info->max_frame_number);
 
 	if (additional_frame == INVALID_ADDR)
 		panic("Could not allocate additional memory for XHCI.");
@@ -173,7 +173,7 @@ static void set_up_dcbaa(XHCI_Info* info)
 
 	// Allocate memory for DCBAA. DCBAA has maximum of 256 entries, that makes 256 * 8 = 2048 bytes.
 	// 2048 < 4096, so one page is enough.
-	Phys_addr dcbaa_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+	Phys_addr dcbaa_phys_addr = allocate_contiguous_general_frames(1, info->max_frame_number);
 	if (dcbaa_phys_addr == INVALID_ADDR)
 		panic("Could not allocate mem for DCBAA.");
 
@@ -209,7 +209,7 @@ static void set_up_scratchpad(XHCI_Info* info)
 	u64 scratchpad_array_page_count = (scratchpad_array_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
 	Phys_addr scratchpad_start_frame_phys_addr =
-		allocate_contiguous_general_frames(&global_frame_allocator, scratchpad_array_page_count, info->max_frame_number);
+		allocate_contiguous_general_frames(scratchpad_array_page_count, info->max_frame_number);
 	Virt_addr scratchpad_start_page_virt_addr = bump_allocate_pages(scratchpad_array_page_count);
 
 
@@ -232,7 +232,7 @@ static void set_up_scratchpad(XHCI_Info* info)
 	for (u32 i = 0; i < n; ++i)
 	{
 		Phys_addr phys_addr =
-			allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+			allocate_contiguous_general_frames(1, info->max_frame_number);
 
 		Virt_addr virt_addr = bump_allocate_pages(1);
 		map_address(virt_addr, phys_addr, PTE_WRITABLE);
@@ -246,7 +246,7 @@ static void set_up_scratchpad(XHCI_Info* info)
 static void set_up_command_ring(const XHCI_Info* info)
 {
 	// 256 TRBs, 16 B each. 256 * 16 = 4096.
-	Phys_addr command_ring_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+	Phys_addr command_ring_phys_addr = allocate_contiguous_general_frames(1, info->max_frame_number);
 	Virt_addr command_ring_virt_addr = bump_allocate_pages(1);
 	map_address(command_ring_virt_addr, command_ring_phys_addr, PTE_WRITABLE);
 	memset((void*)command_ring_virt_addr, 0, FRAME_SIZE);
@@ -282,7 +282,7 @@ static void set_up_event_ring(XHCI_Info* info)
 	volatile u64* erdp = (volatile u64*)&info->runtime_regs[14]; // event ring deque pointer
 
 	Phys_addr event_ring_phys_addr =
-		allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+		allocate_contiguous_general_frames(1, info->max_frame_number);
 	Virt_addr event_ring_virt_addr = bump_allocate_pages(1);
 	map_address(event_ring_virt_addr, event_ring_phys_addr, PTE_WRITABLE);
 	memset((void*)event_ring_virt_addr, 0, FRAME_SIZE);

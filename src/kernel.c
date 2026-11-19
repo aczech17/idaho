@@ -47,7 +47,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     print_memory_map(&kernel_regions, "kernel memory");
 
 
-    setup_frame_allocator(&global_frame_allocator, &phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
+    setup_frame_allocator(&phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
 
     global_page_table = (Page_table*)(kernel_mem_info->page_table_address);
     // vga_printf("\nPage table at %X\n", global_page_table);

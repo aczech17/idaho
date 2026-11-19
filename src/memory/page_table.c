@@ -50,7 +50,7 @@ bool map_address(Virt_addr virt_addr, Phys_addr phys_addr, u64 flags)
 
         if (!(entry & PTE_PRESENT))
         {
-            Frame_address new_frame = allocate_kernel_frame(&global_frame_allocator);
+            Frame_address new_frame = allocate_kernel_frame();
             if (new_frame == INVALID_ADDR)
                 return false;
 

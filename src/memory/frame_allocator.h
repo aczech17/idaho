@@ -25,14 +25,13 @@ extern Frame_allocator global_frame_allocator;
 
 void setup_frame_allocator
 (
-    Frame_allocator* allocator,
     Phys_memory_map* available_regions,
     Phys_memory_map* kernel_regions,
     u64 kernel_memory_size
 );
-Frame_address allocate_kernel_frame(Frame_allocator* allocator);
-Frame_address allocate_general_frame(Frame_allocator* allocator);
-Frame_address allocate_contiguous_general_frames(Frame_allocator* allocator, u64 frames_count, u64 max_frame_number);
-void deallocate_frame(Frame_allocator* allocator, Frame_address frame_address);
+Frame_address allocate_kernel_frame(void);
+Frame_address allocate_general_frame(void);
+Frame_address allocate_contiguous_general_frames(u64 frames_count, u64 max_frame_number);
+void deallocate_frame(Frame_address frame_address);
 
 #endif // MEM_ALLOCATOR_H
