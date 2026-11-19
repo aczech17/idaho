@@ -86,9 +86,9 @@ static u64 get_mmio_xhci_address(const XHCI_Info* info)
 	return mmio_addr;
 }
 
-static void take_ownership(const u64 mmio_addr)
+static void take_ownership(const XHCI_Info* info)
 {
-	volatile u32* regs = (u32*)mmio_addr;
+	volatile u32* regs = (u32*)(info->mmio_addr);
 
 	u32 hccparams1 = regs[4];
 	u32 xecp = ((hccparams1 >> 16) & 0xFFFF);
@@ -100,7 +100,7 @@ static void take_ownership(const u64 mmio_addr)
 
 	for (;;)
 	{
-		volatile u32* header_pointer = (u32*)(mmio_addr + xecp_offset);
+		volatile u32* header_pointer = (u32*)(info->mmio_addr + xecp_offset);
 		u32 header = *header_pointer;
 
 		u8 capability_id = header & 0xFF;
@@ -121,12 +121,12 @@ static void take_ownership(const u64 mmio_addr)
 	}
 }
 
-static void stop(const u64 mmio_addr)
+static void stop(const XHCI_Info* info)
 {
-	volatile u32* regs = (u32*)(mmio_addr);
+	volatile u32* regs = (u32*)(info->mmio_addr);
 	u32 operational_offset = regs[0] & 0xFF;
 
-	volatile u32* operational_regs = (volatile u32*)(mmio_addr + operational_offset);
+	volatile u32* operational_regs = (volatile u32*)(info->mmio_addr + operational_offset);
 	volatile u32* usbcmd = &operational_regs[0];
 	volatile u32* usbsts = &operational_regs[1];
 
@@ -135,12 +135,12 @@ static void stop(const u64 mmio_addr)
 	while (((*usbsts) & 1U) == 0) {}
 }
 
-static void restart(const u64 mmio_addr)
+static void restart(const XHCI_Info* info)
 {
-	volatile u32* regs = (u32*)(mmio_addr);
+	volatile u32* regs = (u32*)(info->mmio_addr);
 	u32 operational_offset = regs[0] & 0xFF;
 
-	volatile u32* operational_regs = (volatile u32*)(mmio_addr + operational_offset);
+	volatile u32* operational_regs = (volatile u32*)(info->mmio_addr + operational_offset);
 	volatile u32* usbcmd = &operational_regs[0];
 	volatile u32* usbsts = &operational_regs[1];
 
@@ -150,13 +150,40 @@ static void restart(const u64 mmio_addr)
 	while (((*usbsts) & (1U << 11)) != 0) {} // controller not ready (CNR)
 }
 
-static void set_up_scratchpad(XHCI_Info* info, u64 max_frame_number)
+static void set_up_dcbaa(XHCI_Info* info)
 {
-	volatile u32* regs = (u32*)(info->mmio_addr);
-	u32 operational_offset = regs[0] & 0xFF;
+	u64 dcbaa_size = (info->max_slots + 1) * 8;
 
-	volatile u32* op_regs = (u32*)(info->mmio_addr + operational_offset);
-	u32 page_size = op_regs[2];
+	// Allocate memory for DCBAA. DCBAA has maximum of 256 entries, that makes 256 * 8 = 2048 bytes.
+	// 2048 < 4096, so one page is enough.
+	Phys_addr dcbaa_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+	if (dcbaa_phys_addr == INVALID_ADDR)
+		panic("Could not allocate mem for DCBAA.");
+
+	Virt_addr dcbaa_virt_addr = bump_allocate_pages(1);
+	map_address(dcbaa_virt_addr, dcbaa_phys_addr, PTE_WRITABLE);
+	memset((void*)dcbaa_virt_addr, 0, dcbaa_size);
+
+	info->dcbaa_virt_addr = dcbaa_virt_addr;
+
+
+	volatile u64* dcbaap = (volatile u64*)&info->op_regs[12];
+
+	volatile u32* xhci_regs = (u32*)(info->mmio_addr);
+	bool supports_64bit_dma = (xhci_regs[4] & 1) != 0;
+
+	if (supports_64bit_dma)
+		*dcbaap = dcbaa_phys_addr;
+	else
+		*(volatile u32*)(dcbaap) = (u32)(dcbaa_phys_addr);
+}
+
+static void set_up_scratchpad(XHCI_Info* info)
+{
+	if (info->scratchpad_count == 0)
+		return;
+
+	u32 page_size = info->op_regs[2];
 
 	if (!(page_size & 1))
 		panic("xHCI does not support 4 KiB pages.");
@@ -165,7 +192,7 @@ static void set_up_scratchpad(XHCI_Info* info, u64 max_frame_number)
 	u64 scratchpad_array_page_count = (scratchpad_array_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
 	Phys_addr scratchpad_start_frame_phys_addr =
-		allocate_contiguous_general_frames(&global_frame_allocator, scratchpad_array_page_count, max_frame_number);
+		allocate_contiguous_general_frames(&global_frame_allocator, scratchpad_array_page_count, info->max_frame_number);
 	Virt_addr scratchpad_start_page_virt_addr = bump_allocate_pages(scratchpad_array_page_count);
 
 
@@ -187,7 +214,9 @@ static void set_up_scratchpad(XHCI_Info* info, u64 max_frame_number)
 	u32 n = info->scratchpad_count;
 	for (u32 i = 0; i < n; ++i)
 	{
-		Phys_addr phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, max_frame_number);
+		Phys_addr phys_addr =
+			allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+
 		Virt_addr virt_addr = bump_allocate_pages(1);
 		map_address(virt_addr, phys_addr, PTE_WRITABLE);
 		memset((void*)virt_addr, 0, FRAME_SIZE);
@@ -195,6 +224,30 @@ static void set_up_scratchpad(XHCI_Info* info, u64 max_frame_number)
 		u64* scratchpad_addresses = (u64*)(info->scratchpad_virt_addr);
 		scratchpad_addresses[i] = phys_addr;
 	}
+}
+
+static void set_up_command_ring(const XHCI_Info* info)
+{
+
+	// 256 TRBs, 16 B each. 256 * 16 = 4096.
+	Phys_addr command_ring_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+	Virt_addr command_ring_virt_addr = bump_allocate_pages(1);
+	map_address(command_ring_virt_addr, command_ring_phys_addr, PTE_WRITABLE);
+	memset((void*)command_ring_virt_addr, 0, FRAME_SIZE);
+
+	Virt_addr link_trb_address = command_ring_virt_addr + 255 * 16;
+
+	u32 link_trb[4];
+	*(u64*)&link_trb[0] = command_ring_phys_addr;
+	link_trb[2] = 0;
+	link_trb[3] = 1;
+	link_trb[3] |= 6 << 10;
+	link_trb[3] |= (1 << 16);
+
+	memory_copy((char*)link_trb_address, (char*)link_trb, 16);
+
+	volatile u64* crcr = (volatile u64*)&info->op_regs[6];
+	*crcr = command_ring_phys_addr | 1; // set RCS
 }
 
 XHCI_Info setup_xhci(void)
@@ -233,6 +286,10 @@ XHCI_Info setup_xhci(void)
 	u32 hccparams1 = xhci_regs[4];
 
 	volatile u32* op_regs = (volatile u32*)(mmio_addr + cap_length);
+	xhci_info.op_regs = op_regs;
+
+	volatile u32* usbcmd = &op_regs[0];
+	volatile u32* usbsts = &op_regs[1];
 	volatile u32* config = &op_regs[14];
 
 	xhci_info.max_slots = hcsparams1 & 0xFF;
@@ -240,9 +297,9 @@ XHCI_Info setup_xhci(void)
 	xhci_info.max_ports = (hcsparams1 >> 24) & 0xFF;
 	xhci_info.scratchpad_count = (((hcsparams2 >> 21) & 0x1F) << 5) | ((hcsparams2 >> 27) & 0x1F);
 
-	take_ownership(mmio_addr);
-	stop(mmio_addr);
-	restart(mmio_addr);
+	take_ownership(&xhci_info);
+	stop(&xhci_info);
+	restart(&xhci_info);
 
 	// set max slots shared with kernel to max value possible
 	u32 config_val = *config;
@@ -250,32 +307,15 @@ XHCI_Info setup_xhci(void)
 	*config = config_val;
 
 	bool supports_64bit_dma = (hccparams1 & 1) != 0;
-	u64 max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE * 8 - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
+	xhci_info.max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE * 8 - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
 
-	u64 dcbaa_size = (xhci_info.max_slots + 1) * 8;
+	set_up_dcbaa(&xhci_info);
+	set_up_scratchpad(&xhci_info);
+	set_up_command_ring(&xhci_info);
 
-	// Allocate memory for DCBAA. DCBAA has maximum of 256 entries, that makes 256 * 8 = 2048 bytes.
-	// 2048 < 4096, so one page is enough.
-	Phys_addr dcbaa_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, max_frame_number);
-	if (dcbaa_phys_addr == INVALID_ADDR)
-		panic("Could not allocate mem for DCBAA.");
-
-	Virt_addr dcbaa_virt_addr = bump_allocate_pages(1);
-	map_address(dcbaa_virt_addr, dcbaa_phys_addr, PTE_WRITABLE);
-	memset((void*)dcbaa_virt_addr, 0, dcbaa_size);
-
-	xhci_info.dcbaa_virt_addr = dcbaa_virt_addr;
+	*usbcmd |= 1; // enable controller
 
 
-	if (xhci_info.scratchpad_count > 0)
-		set_up_scratchpad(&xhci_info, max_frame_number);
-
-	volatile u64* dcbaap = (volatile u64*)&op_regs[12];
-
-	if (supports_64bit_dma)
-		*dcbaap = dcbaa_phys_addr;
-	else
-		*(volatile u32*)(dcbaap) = (u32)(dcbaa_phys_addr);
 
 	return xhci_info;
 }

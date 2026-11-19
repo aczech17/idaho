@@ -21,6 +21,8 @@ typedef struct
 	u32 scratchpad_count;
 	Virt_addr dcbaa_virt_addr;
 	Virt_addr scratchpad_virt_addr;
+	u64 max_frame_number;
+	volatile u32* op_regs;
 }XHCI_Info;
 
 u32 pci_read_config(u8 bus, u8 device, u8 function, u8 offset);
