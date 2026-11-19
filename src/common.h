@@ -23,7 +23,8 @@ void invalidate_tlb_entry(u64 virtual_address);
 
 
 size_t string_len(const char* text);
-void memory_copy(char* dst, const char* src, size_t count);
+
+void* memcpy(void* dst, const void* src, size_t count);
 void* memset(void* dest, int value, size_t count);
 void vga_printf(const char* format, ...);
 void panic(const char* msg);

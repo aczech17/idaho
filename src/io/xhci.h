@@ -21,8 +21,19 @@ typedef struct
 	u32 scratchpad_count;
 	Virt_addr dcbaa_virt_addr;
 	Virt_addr scratchpad_virt_addr;
+	bool supports_64bit_dma;
 	u64 max_frame_number;
 	volatile u32* op_regs;
+
+	Virt_addr additional_page_virt_addr;
+	Phys_addr additional_page_phys_addr;
+	u64 additional_page_offset;
+
+	Virt_addr event_ring_virt_addr;
+	Phys_addr event_ring_phys_addr;
+
+	u64 trb_index;
+	u8 consumer_cycle_state;
 }XHCI_Info;
 
 u32 pci_read_config(u8 bus, u8 device, u8 function, u8 offset);

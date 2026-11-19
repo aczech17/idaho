@@ -10,10 +10,15 @@ size_t string_len(const char* text)
     return len;
 }
 
-void memory_copy(char* dst, const char* src, size_t count)
+void* memcpy(void* dst, const void* src, size_t count)
 {
-    while (count--)
-        *dst++ = *src++;
+    u8* d = (u8*)dst;
+    u8* s = (u8*)src;
+
+    for (size_t i = 0; i < count; ++i)
+        d[i] = s[i];
+
+    return dst;
 }
 
 void* memset(void* dest, int value, size_t count)

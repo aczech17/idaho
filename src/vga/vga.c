@@ -21,7 +21,7 @@ static void write_char_vga(char c, size_t row, size_t col, char color)
 
 static void scroll_down(void)
 {
-    memory_copy(VGA_ADDRESS, VGA_ADDRESS + VGA_WIDTH * 2, VGA_SIZE - VGA_WIDTH * 2);
+    memcpy(VGA_ADDRESS, VGA_ADDRESS + VGA_WIDTH * 2, VGA_SIZE - VGA_WIDTH * 2);
 
     // Clear the bottom row.
     for (size_t col = 0; col < VGA_WIDTH; ++col)

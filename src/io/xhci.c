@@ -150,6 +150,23 @@ static void restart(const XHCI_Info* info)
 	while (((*usbsts) & (1U << 11)) != 0) {} // controller not ready (CNR)
 }
 
+static void allocate_additional_page(XHCI_Info* info)
+{
+	Phys_addr additional_frame =
+		allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+
+	if (additional_frame == INVALID_ADDR)
+		panic("Could not allocate additional memory for XHCI.");
+
+	Virt_addr additional_page = bump_allocate_pages(1);
+	map_address(additional_page, additional_frame, PTE_WRITABLE);
+	memset((void*)additional_page, 0, FRAME_SIZE);
+
+	info->additional_page_virt_addr = additional_page;
+	info->additional_page_phys_addr = additional_frame;
+	info->additional_page_offset = 0;
+}
+
 static void set_up_dcbaa(XHCI_Info* info)
 {
 	u64 dcbaa_size = (info->max_slots + 1) * 8;
@@ -228,7 +245,6 @@ static void set_up_scratchpad(XHCI_Info* info)
 
 static void set_up_command_ring(const XHCI_Info* info)
 {
-
 	// 256 TRBs, 16 B each. 256 * 16 = 4096.
 	Phys_addr command_ring_phys_addr = allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
 	Virt_addr command_ring_virt_addr = bump_allocate_pages(1);
@@ -244,10 +260,61 @@ static void set_up_command_ring(const XHCI_Info* info)
 	link_trb[3] |= 6 << 10;
 	link_trb[3] |= (1 << 16);
 
-	memory_copy((char*)link_trb_address, (char*)link_trb, 16);
+	memcpy((char*)link_trb_address, (char*)link_trb, 16);
 
 	volatile u64* crcr = (volatile u64*)&info->op_regs[6];
-	*crcr = command_ring_phys_addr | 1; // set RCS
+
+	if (info->supports_64bit_dma)
+		*crcr = command_ring_phys_addr | 1; // set RCS
+	else
+		*(volatile u32*)crcr = (u32)command_ring_phys_addr | 1;
+}
+
+static void set_up_event_ring(XHCI_Info* info)
+{
+	volatile u32* xhci_regs = (volatile u32*)(info->mmio_addr);
+	u32 rtsoff = xhci_regs[6] & ~0x1FU;
+	volatile u32* runtime_regs = (volatile u32*)(info->mmio_addr + rtsoff);
+
+	volatile u32* erstz = &runtime_regs[10];
+	volatile u64* erstba = (volatile u64*)&runtime_regs[12];
+	volatile u64* erdp = (volatile u64*)&runtime_regs[14]; // event ring deque pointer
+
+	Phys_addr event_ring_phys_addr =
+		allocate_contiguous_general_frames(&global_frame_allocator, 1, info->max_frame_number);
+	Virt_addr event_ring_virt_addr = bump_allocate_pages(1);
+	map_address(event_ring_virt_addr, event_ring_phys_addr, PTE_WRITABLE);
+	memset((void*)event_ring_virt_addr, 0, FRAME_SIZE);
+
+	info->event_ring_virt_addr = event_ring_virt_addr;
+	info->event_ring_phys_addr = event_ring_phys_addr;
+
+	u8 erst[16] = {0};
+	*(u64*)&erst[0] = event_ring_phys_addr;
+	*(u16*)&erst[8] = 256;
+
+	// Copy ERST to additional XHCI page.
+	info->additional_page_offset = (info->additional_page_offset + 63) & ~63ULL;
+	Virt_addr new_erst_address = info->additional_page_virt_addr + info->additional_page_offset;
+	Phys_addr phys_erst_address = info->additional_page_phys_addr + info->additional_page_offset;
+	memcpy((void*)new_erst_address, erst, sizeof(erst));
+	info->additional_page_offset += sizeof(erst);
+
+	*erstz = 1;
+
+	if (info->supports_64bit_dma)
+	{
+		*erdp = event_ring_phys_addr;
+		*erstba = phys_erst_address;
+	}
+	else
+	{
+		runtime_regs[14] = (u32)event_ring_phys_addr;
+		runtime_regs[12] = (u32)phys_erst_address;
+	}
+
+	info->trb_index = 0;
+	info->consumer_cycle_state = 1;
 }
 
 XHCI_Info setup_xhci(void)
@@ -289,7 +356,7 @@ XHCI_Info setup_xhci(void)
 	xhci_info.op_regs = op_regs;
 
 	volatile u32* usbcmd = &op_regs[0];
-	volatile u32* usbsts = &op_regs[1];
+	// volatile u32* usbsts = &op_regs[1];
 	volatile u32* config = &op_regs[14];
 
 	xhci_info.max_slots = hcsparams1 & 0xFF;
@@ -306,12 +373,15 @@ XHCI_Info setup_xhci(void)
 	config_val = (config_val & ~0xFF) | xhci_info.max_slots;
 	*config = config_val;
 
-	bool supports_64bit_dma = (hccparams1 & 1) != 0;
-	xhci_info.max_frame_number = supports_64bit_dma ? FRAME_BITMAP_SIZE * 8 - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
+	xhci_info.supports_64bit_dma = (hccparams1 & 1) != 0;
+	xhci_info.max_frame_number = xhci_info.supports_64bit_dma ? FRAME_BITMAP_SIZE * 8 - 1 : 0xFFFFFFFFULL / FRAME_SIZE;
+
+	allocate_additional_page(&xhci_info);
 
 	set_up_dcbaa(&xhci_info);
 	set_up_scratchpad(&xhci_info);
 	set_up_command_ring(&xhci_info);
+	set_up_event_ring(&xhci_info);
 
 	*usbcmd |= 1; // enable controller
 
