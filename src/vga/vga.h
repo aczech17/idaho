@@ -19,6 +19,7 @@ typedef struct
 extern Vga_buffer global_vga_buffer;
 extern const char default_vga_color;
 
+void disable_bios_cursor(void);
 void clear_screen(void);
 void write_char(const char c);
 void write_string(const char* text);

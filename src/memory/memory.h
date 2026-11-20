@@ -13,5 +13,6 @@ typedef Phys_addr Frame_address;
 
 void set_cr3(u64 pt_tree_addr);
 void load_idtr(u64 idtr_addr);
+void invalidate_tlb_entry(u64 virtual_address);
 
 #endif // MEMORY_COMMON_H

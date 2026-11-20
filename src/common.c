@@ -2,10 +2,10 @@
 #include "vga/vga.h"
 #include <stdarg.h>
 
-size_t string_len(const char* text)
+size_t strlen(const char* str)
 {
     size_t len = 0;
-    for (; *text != 0; ++text)
+    for (; *str != 0; ++str)
         ++len;
     return len;
 }
