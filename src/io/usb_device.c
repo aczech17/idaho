@@ -111,6 +111,18 @@ static void setup_device_context(USB_Device* device)
 	controller_dcbaa[device->slot_id] = ctxt_phys_addr;
 }
 
+static void setup_input_context(USB_Device* device)
+{
+	Virt_addr ctxt_virt_addr = arena_allocate_pages(&xhci_driver_page_allocator, 1);
+	Phys_addr ctxt_phys_addr = allocate_general_frame();
+	map_address(ctxt_virt_addr, ctxt_phys_addr, PTE_WRITABLE);
+
+	memset((void*)ctxt_virt_addr, 0, FRAME_SIZE);
+
+	device->input_context_virt_addr = ctxt_virt_addr;
+	device->input_context_phys_addr = ctxt_phys_addr;
+}
+
 bool setup_usb_device(USB_Device* device, XHCI_Info* xhci)
 {
 	device->xhci_info = xhci;
@@ -157,6 +169,7 @@ bool setup_usb_device(USB_Device* device, XHCI_Info* xhci)
 	device->port_speed = (portsc >> 10) & 0xFF;
 
 	setup_device_context(device);
+	setup_input_context(device);
 
 	return true;
 }
