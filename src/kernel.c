@@ -91,6 +91,34 @@ bool reset_port(XHCI_Info* xhci_info, u8 port_id)
 	return success;
 }
 
+void enable_slot(XHCI_Info* info, u8 slot_type)
+{
+	u32 enable_slot_command[4] = {0};
+	enable_slot_command[3] = 9 << 10;
+	enable_slot_command[3] |= (slot_type << 16);
+
+	write_command_trb(info, enable_slot_command);
+	doorbell_command_ring(info);
+}
+
+bool detect_enable_completion(u32 event_trb[4], u8* slot_id)
+{
+	const u32 COMMAND_COMPLETION_EVENT = 33;
+
+	u32 event_type = (event_trb[3] >> 10) & 0x3F;
+	if (event_type != COMMAND_COMPLETION_EVENT)
+		return false;
+
+	u8 completion_code = (event_trb[2] >> 24) & 0xFF;
+	if (!completion_code)
+		return false;
+
+	*slot_id = (event_trb[3] >> 24) & 0xFF;
+
+	return true;
+}
+
+
 void kernel_main(const Kernel_mem_info* kernel_mem_info)
 {
     const Phys_addr LOW_MEM_SIZE = 1 << 20;
@@ -146,6 +174,22 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 			break;
 		}
 	}
+
+	enable_slot(&xhci_info, 0);
+	u8 slot_id;
+
+	while (1)
+	{
+		while (!read_event_trb(&xhci_info, event)) {}
+		update_event_ring_dequeue_pointer(&xhci_info);
+
+		if (detect_enable_completion(event, &slot_id))
+			break;
+	}
+
+	vga_printf("Got slot ID = %X\n", slot_id);
+
+
 
     for (;;);
 }

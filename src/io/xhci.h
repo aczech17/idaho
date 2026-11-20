@@ -19,7 +19,11 @@ typedef struct
 	u16 max_interrupters;
 	u8 max_ports;
 	u32 scratchpad_count;
+
 	Virt_addr dcbaa_virt_addr;
+	Phys_addr dcbaa_phys_addr;
+	bool context_size_64;
+
 	Virt_addr scratchpad_virt_addr;
 	bool supports_64bit_dma;
 	u64 max_frame_number;

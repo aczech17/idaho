@@ -182,7 +182,7 @@ static void set_up_dcbaa(XHCI_Info* info)
 	memset((void*)dcbaa_virt_addr, 0, dcbaa_size);
 
 	info->dcbaa_virt_addr = dcbaa_virt_addr;
-
+	info->dcbaa_phys_addr = dcbaa_phys_addr;
 
 	volatile u64* dcbaap = (volatile u64*)&info->op_regs[12];
 
@@ -363,6 +363,8 @@ XHCI_Info setup_xhci(void)
 
 	volatile u32* op_regs = (volatile u32*)(mmio_addr + cap_length);
 	xhci_info.op_regs = op_regs;
+
+	xhci_info.context_size_64 = (hccparams1  & (1U << 2)) != 0;
 
 	volatile u32* usbcmd = &op_regs[0];
 	// volatile u32* usbsts = &op_regs[1];
