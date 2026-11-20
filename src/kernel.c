@@ -2,7 +2,7 @@
 #include "memory/frame_allocator.h"
 #include "memory/page_table.h"
 #include "interrupt/idt.h"
-#include "io/keyboard_driver.h"
+#include "io/usb_device.h"
 #include "vga/vga.h"
 #include "io/xhci.h"
 
@@ -63,8 +63,8 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     vga_printf("XHCI set up.\n\n");
 
 
-	Keyboard_driver keyboard_driver;
-	setup_keyboard_driver(&keyboard_driver, &xhci_info);
+	USB_Device keyboard_driver;
+	setup_usb_device(&keyboard_driver, &xhci_info);
 
 
 	vga_printf("port: %X, slot: %X\n", keyboard_driver.port_id, keyboard_driver.slot_id);

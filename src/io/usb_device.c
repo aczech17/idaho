@@ -1,4 +1,8 @@
-#include "keyboard_driver.h"
+#include "usb_device.h"
+#include "../memory/frame_allocator.h"
+#include "../memory/arena_allocator.h"
+#include "../memory/page_table.h"
+
 
 static bool detect_usb_device_connected(XHCI_Info* xhci, u32 event[4], u8* port_id)
 {
@@ -91,10 +95,25 @@ static bool detect_enable_completion(u32 event_trb[4], u8* completion_code, u8* 
 	return true;
 }
 
-
-bool setup_keyboard_driver(Keyboard_driver* driver, XHCI_Info* xhci)
+static void setup_device_context(USB_Device* device)
 {
-	driver->xhci_info = xhci;
+	Virt_addr ctxt_virt_addr = arena_allocate_pages(&xhci_driver_page_allocator, 1);
+	Phys_addr ctxt_phys_addr = allocate_general_frame();
+	map_address(ctxt_virt_addr, ctxt_phys_addr, PTE_WRITABLE);
+
+	memset((void*)ctxt_virt_addr, 0, FRAME_SIZE);
+
+	device->device_context_virt_addr = ctxt_virt_addr;
+	device->device_context_phys_addr = ctxt_phys_addr;
+
+	// The XHCI controller should also know this address.
+	volatile u64* controller_dcbaa = (volatile u64*)(device->xhci_info->dcbaa_virt_addr);
+	controller_dcbaa[device->slot_id] = ctxt_phys_addr;
+}
+
+bool setup_usb_device(USB_Device* device, XHCI_Info* xhci)
+{
+	device->xhci_info = xhci;
 
 	u32 event[4];
 
@@ -104,12 +123,12 @@ bool setup_keyboard_driver(Keyboard_driver* driver, XHCI_Info* xhci)
 		while (!read_event_trb(xhci, event)) {}
 		update_event_ring_dequeue_pointer(xhci);
 
-		if (!detect_usb_device_connected(xhci, event, &driver->port_id))
+		if (!detect_usb_device_connected(xhci, event, &device->port_id))
 			continue;
 
-		if (reset_port(xhci, driver->port_id))
+		if (reset_port(xhci, device->port_id))
 		{
-			// vga_printf("Port %X reset success.\n", driver->port_id);
+			// vga_printf("Port %X reset success.\n", device->port_id);
 			break;
 		}
 	}
@@ -122,7 +141,7 @@ bool setup_keyboard_driver(Keyboard_driver* driver, XHCI_Info* xhci)
 		while (!read_event_trb(xhci, event)) {}
 		update_event_ring_dequeue_pointer(xhci);
 
-		if (detect_enable_completion(event, &completion_code, &driver->slot_id))
+		if (detect_enable_completion(event, &completion_code, &device->slot_id))
 		{
 			if (!completion_code)
 				return false;
@@ -130,8 +149,14 @@ bool setup_keyboard_driver(Keyboard_driver* driver, XHCI_Info* xhci)
 			break;
 		}
 	}
+	// Port reset complete.
 
-	// vga_printf("Got slot ID = %X\n", driver->slot_id);
+	u32 portsc_index = 256 + (device->port_id - 1) * 4;
+	u32 portsc = xhci->op_regs[portsc_index];
+
+	device->port_speed = (portsc >> 10) & 0xFF;
+
+	setup_device_context(device);
 
 	return true;
 }

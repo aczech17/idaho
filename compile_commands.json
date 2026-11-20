@@ -200,7 +200,7 @@
     "output": "out/kernel.bin"
   },
   {
-    "file": "src/io/keyboard_driver.c",
+    "file": "src/io/usb_device.c",
     "arguments": [
       "/usr/bin/gcc",
       "-std=c11",
