@@ -243,7 +243,7 @@ static void set_up_scratchpad(XHCI_Info* info)
 	}
 }
 
-static void set_up_command_ring(const XHCI_Info* info)
+static void set_up_command_ring(XHCI_Info* info)
 {
 	// 256 TRBs, 16 B each. 256 * 16 = 4096.
 	Phys_addr command_ring_phys_addr = allocate_contiguous_general_frames(1, info->max_frame_number);
@@ -251,14 +251,22 @@ static void set_up_command_ring(const XHCI_Info* info)
 	map_address(command_ring_virt_addr, command_ring_phys_addr, PTE_WRITABLE);
 	memset((void*)command_ring_virt_addr, 0, FRAME_SIZE);
 
+	info->command_ring_virt_addr = command_ring_virt_addr;
+	info->command_ring_phys_addr = command_ring_phys_addr;
+	info->command_ring_trb_index = 0;
+	info->command_ring_cycle_state = true;
+
 	Virt_addr link_trb_address = command_ring_virt_addr + 255 * 16;
 
 	u32 link_trb[4];
 	*(u64*)&link_trb[0] = command_ring_phys_addr;
 	link_trb[2] = 0;
-	link_trb[3] = 1;
-	link_trb[3] |= 6 << 10;
-	link_trb[3] |= (1 << 16);
+
+	// link_trb[3] = 1;
+	// link_trb[3] |= 6 << 10;
+	// link_trb[3] |= (1 << 16);
+
+	link_trb[3] = (6 << 10) | (1 << 1);
 
 	memcpy((char*)link_trb_address, (char*)link_trb, 16);
 
@@ -314,8 +322,8 @@ static void set_up_event_ring(XHCI_Info* info)
 		info->runtime_regs[12] = (u32)phys_erst_address;
 	}
 
-	info->trb_index = 0;
-	info->consumer_cycle_state = true;
+	info->event_ring_trb_index = 0;
+	info->event_ring_cycle_state = true;
 }
 
 XHCI_Info setup_xhci(void)
@@ -393,22 +401,22 @@ XHCI_Info setup_xhci(void)
 
 bool read_event_trb(XHCI_Info* info, u32 event_trb[4])
 {
-	Virt_addr current_entry_addr = info->event_ring_virt_addr + info->trb_index * 16;
+	Virt_addr current_entry_addr = info->event_ring_virt_addr + info->event_ring_trb_index * 16;
 	volatile u32* current_entry = (volatile u32*)(current_entry_addr);
 	bool cycle_bit = (current_entry[3] & 1) != 0;
 
-	if (cycle_bit != info->consumer_cycle_state)
+	if (cycle_bit != info->event_ring_cycle_state)
 		return false;
 
 
 	for (u64 i = 0; i < 4; ++i)
 		event_trb[i] = current_entry[i];
 
-	++info->trb_index;
-	if (info->trb_index == 256)
+	++info->event_ring_trb_index;
+	if (info->event_ring_trb_index == 256)
 	{
-		info->trb_index = 0;
-		info->consumer_cycle_state = !info->consumer_cycle_state;
+		info->event_ring_trb_index = 0;
+		info->event_ring_cycle_state = !info->event_ring_cycle_state;
 	}
 
 	return true;
@@ -416,8 +424,52 @@ bool read_event_trb(XHCI_Info* info, u32 event_trb[4])
 
 void update_event_ring_dequeue_pointer(XHCI_Info* info)
 {
-	Phys_addr dequeue_pointer = info->event_ring_phys_addr + info->trb_index * 16;
+	Phys_addr dequeue_pointer = info->event_ring_phys_addr + info->event_ring_trb_index * 16;
 
 	volatile u64* erdp = (volatile u64*)&info->runtime_regs[14];
 	*erdp = dequeue_pointer | (1 << 3);
+}
+
+bool write_command_trb(XHCI_Info* info, u32 command_trb[4])
+{
+	Virt_addr current_entry_addr = info->command_ring_virt_addr + info->command_ring_trb_index * 16;
+	volatile u32* current_entry = (volatile u32*)(current_entry_addr);
+
+	for (int i = 0; i < 3; ++i)
+		current_entry[i] = command_trb[i];
+
+	u32 last_dword = info->command_ring_cycle_state ? (command_trb[3] | 1) : (command_trb[3] & ~1);
+
+	__atomic_thread_fence(__ATOMIC_RELEASE);
+	current_entry[3] = last_dword;
+
+	++info->command_ring_trb_index;
+	if (info->command_ring_trb_index == 255)
+	{
+		Virt_addr link_trb_addr = info->command_ring_virt_addr + 255 * 16;
+		volatile u32* link_trb = (volatile u32*)(link_trb_addr);
+
+		u32 link_control =
+			info->command_ring_cycle_state ? (link_trb[3] | 1) : (link_trb[3] & ~1);
+
+		__atomic_thread_fence(__ATOMIC_RELEASE);
+		link_trb[3] = link_control;
+
+		if (link_control & (1 << 1))
+			info->command_ring_cycle_state = !info->command_ring_cycle_state;
+
+		info->command_ring_trb_index = 0;
+	}
+
+	return true;
+}
+
+void doorbell_command_ring(XHCI_Info* info)
+{
+	volatile u32* dboff_reg = (volatile u32*)(info->mmio_addr + 0x14);
+	u32 dboff_offset = *dboff_reg & ~3;
+	volatile u32* doorbell = (volatile u32*)(info->mmio_addr + dboff_offset);
+
+	__atomic_thread_fence(__ATOMIC_RELEASE);
+	doorbell[0] = 0;
 }

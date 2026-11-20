@@ -24,6 +24,73 @@ static void print_memory_map(const Phys_memory_map* memory_regions, const char* 
     // vga_printf("Total frames in %s: %X\n%z\n", name, total_frames_available);
 }
 
+bool detect_usb_device_connected(XHCI_Info* xhci, u32 event[4], u8* port_id)
+{
+	const u32 PORT_STATUS_CHANGED = 34;
+
+	u32 event_type = (event[3] >> 10) & 0x3F;
+	if (event_type != PORT_STATUS_CHANGED)
+		return false;
+
+	u8 _port_id = (event[0] >> 24) & 0xFF;
+	if (_port_id == 0 || _port_id > xhci->max_ports)
+		return false;
+
+	u32 portsc_index = 256 + (_port_id - 1) * 4;
+	u32 portsc = xhci->op_regs[portsc_index];
+
+	bool connected = (portsc & 1U) != 0;
+	bool connection_changed = (portsc & (1 << 17U)) != 0;
+
+	if (connection_changed && connected)
+	{
+		*port_id = _port_id;
+		return true;
+	}
+
+	return false;
+}
+
+bool reset_port(XHCI_Info* xhci_info, u8 port_id)
+{
+	u32 portsc_index = 256 + (port_id - 1) * 4;
+	volatile u32* portsc = &xhci_info->op_regs[portsc_index];
+
+	const u32 CCS	= 1 << 0;
+	const u32 PED	= 1 << 1;
+	const u32 PR	= 1 << 4;
+	const u32 PRC	= 1 << 21;
+
+	const u32 PORTSC_NEUTRAL_MASK =
+		(1U << 0)  |  // CCS
+		(1U << 3)  |  // OCA
+		(0xFU << 5) | // PLS
+		(1U << 9)  |  // PP
+		(0xFU << 10) | // Port Speed
+		(3U << 14) | // PIC
+		(7U << 25) | // WCE, WDE, WOE
+		(1U << 30);   // DR
+
+	// clear PRC
+	u32 portsc_value = *portsc & PORTSC_NEUTRAL_MASK;
+	*portsc = portsc_value | PRC;
+
+	// start reset
+	portsc_value = *portsc & PORTSC_NEUTRAL_MASK;
+	*portsc = portsc_value | PR;
+
+	while (*portsc & PR) {}
+	while ((*portsc & PRC) == 0) {}
+
+	portsc_value = *portsc;
+	bool success = (portsc_value & CCS) && (portsc_value & PED);
+
+	portsc_value = *portsc & PORTSC_NEUTRAL_MASK;
+	*portsc = portsc_value | (1U << 21);
+
+	return success;
+}
+
 void kernel_main(const Kernel_mem_info* kernel_mem_info)
 {
     const Phys_addr LOW_MEM_SIZE = 1 << 20;
@@ -65,19 +132,19 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	u32 event[4];
 	while (1)
 	{
-		bool received_any = false;
+		while (!read_event_trb(&xhci_info, event)) {}
+		update_event_ring_dequeue_pointer(&xhci_info);
 
-		while (read_event_trb(&xhci_info, event))
+		u8 port_id;
+
+		if (!detect_usb_device_connected(&xhci_info, event, &port_id))
+			continue;
+
+		if (reset_port(&xhci_info, port_id))
 		{
-			vga_printf("%ZA device has been connected.\n%z", 0x1F);
-			received_any = true;
+			vga_printf("Port %X reset success.\n", port_id);
+			break;
 		}
-
-		if (received_any)
-        {
-			update_event_ring_dequeue_pointer(&xhci_info);
-            break;
-        }
 	}
 
     for (;;);
