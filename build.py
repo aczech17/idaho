@@ -21,7 +21,9 @@ kernel_asm_sources_and_outputs = [
 
 kernel_c_sources = ['src/kernel.c', 'src/vga/vga.c', 'src/common.c', 'src/memory/phys_memory_map.c', 'src/memory/frame_allocator.c',
                   'src/memory/page_table.c',
-                  'src/interrupt/handlers.c', 'src/interrupt/idt.c', 'src/io/xhci.c', 'src/memory/arena_allocator.c']
+                  'src/interrupt/handlers.c', 'src/interrupt/idt.c', 'src/io/xhci.c', 'src/memory/arena_allocator.c',
+                    'src/io/keyboard_driver.c']
+
 linker_script_template = 'linker_template.ld'
 mem_layout_path = 'out/mem_layout.inc'
 
