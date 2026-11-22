@@ -318,20 +318,108 @@ def qmp_execute(qmp_stream, command, arguments=None):
 
         raise RuntimeError(f"Unexpected QMP response: {response}")
 
+# def qemu_run(qemu_memory_size, use_curses):
+#     print(f"Running QEMU with {qemu_memory_size}iB of memory.")
+#
+#     qmp_socket_path = "/tmp/idaho-os-qmp.sock"
+#
+#     if os.path.exists(qmp_socket_path):
+#         os.remove(qmp_socket_path)
+#
+#     qemu_command = [
+#         'qemu-system-x86_64',
+#         '-drive', f'format=raw,file={os_image_path}',
+#         '-m', qemu_memory_size,
+#         '-device', 'qemu-xhci,id=xhci',
+#         '-qmp', f'unix:{qmp_socket_path},server=on,wait=off'
+#     ]
+#
+#     if use_curses:
+#         qemu_command += ['-vga', 'std', '-display', 'curses']
+#
+#     qemu_process = None
+#     try:
+#         qemu_process = subprocess.Popen(qemu_command)
+#         qmp_socket = None
+#
+#         for _ in range(100):
+#             try:
+#                 qmp_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+#                 qmp_socket.connect(qmp_socket_path)
+#                 break
+#             except OSError:
+#                 if qmp_socket is not None:
+#                     qmp_socket.close()
+#
+#                 qmp_socket = None
+#
+#                 if qemu_process.poll() is not None:
+#                     raise RuntimeError("QEMU quitted before starting QMP.")
+#
+#                 time.sleep(0.1)
+#
+#         if qmp_socket is None:
+#             raise RuntimeError("Could not connect to QMP.")
+#
+#         with qmp_socket:
+#             with qmp_socket.makefile("rwb") as qmp_stream:
+#                 greeting_line = qmp_stream.readline()
+#
+#                 if not greeting_line:
+#                     raise RuntimeError("QMP has not sent a greeting.")
+#
+#                 greeting = json.loads(greeting_line)
+#
+#                 if "QMP" not in greeting:
+#                     raise RuntimeError("Invalid QMP greeting.")
+#
+#                 qmp_execute(qmp_stream, "qmp_capabilities")
+#
+#                 print("Waiting for the OS to initialize xHCI...")
+#                 time.sleep(2.0)
+#
+#                 qmp_execute(
+#                     qmp_stream,
+#                     "device_add",
+#                     {
+#                         "driver": "usb-kbd",
+#                         "bus": "xhci.0",
+#                         "id": "kbd"
+#                     }
+#                 )
+#
+#                 print("USB keyboard connected.")
+#
+#         qemu_process.wait()
+#
+#     except KeyboardInterrupt:
+#         if qemu_process is not None:
+#             qemu_process.terminate()
+#             qemu_process.wait()
+#
+#         print_yellow("Simulation terminated.")
+#         sys.exit(0)
+#
+#     except Exception:
+#         if qemu_process is not None and qemu_process.poll() is None:
+#             qemu_process.terminate()
+#             qemu_process.wait()
+#
+#         raise
+#
+#     finally:
+#         if os.path.exists(qmp_socket_path):
+#             os.remove(qmp_socket_path)
+
 def qemu_run(qemu_memory_size, use_curses):
     print(f"Running QEMU with {qemu_memory_size}iB of memory.")
-
-    qmp_socket_path = "/tmp/idaho-os-qmp.sock"
-
-    if os.path.exists(qmp_socket_path):
-        os.remove(qmp_socket_path)
 
     qemu_command = [
         'qemu-system-x86_64',
         '-drive', f'format=raw,file={os_image_path}',
         '-m', qemu_memory_size,
         '-device', 'qemu-xhci,id=xhci',
-        '-qmp', f'unix:{qmp_socket_path},server=on,wait=off'
+        '-device', 'usb-kbd,bus=xhci.0,id=kbd'
     ]
 
     if use_curses:
@@ -340,56 +428,6 @@ def qemu_run(qemu_memory_size, use_curses):
     qemu_process = None
     try:
         qemu_process = subprocess.Popen(qemu_command)
-        qmp_socket = None
-
-        for _ in range(100):
-            try:
-                qmp_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                qmp_socket.connect(qmp_socket_path)
-                break
-            except OSError:
-                if qmp_socket is not None:
-                    qmp_socket.close()
-
-                qmp_socket = None
-
-                if qemu_process.poll() is not None:
-                    raise RuntimeError("QEMU quitted before starting QMP.")
-
-                time.sleep(0.1)
-
-        if qmp_socket is None:
-            raise RuntimeError("Could not connect to QMP.")
-
-        with qmp_socket:
-            with qmp_socket.makefile("rwb") as qmp_stream:
-                greeting_line = qmp_stream.readline()
-
-                if not greeting_line:
-                    raise RuntimeError("QMP has not sent a greeting.")
-
-                greeting = json.loads(greeting_line)
-
-                if "QMP" not in greeting:
-                    raise RuntimeError("Invalid QMP greeting.")
-
-                qmp_execute(qmp_stream, "qmp_capabilities")
-
-                print("Waiting for the OS to initialize xHCI...")
-                time.sleep(2.0)
-
-                qmp_execute(
-                    qmp_stream,
-                    "device_add",
-                    {
-                        "driver": "usb-kbd",
-                        "bus": "xhci.0",
-                        "id": "kbd"
-                    }
-                )
-
-                print("USB keyboard connected.")
-
         qemu_process.wait()
 
     except KeyboardInterrupt:
@@ -406,10 +444,6 @@ def qemu_run(qemu_memory_size, use_curses):
             qemu_process.wait()
 
         raise
-
-    finally:
-        if os.path.exists(qmp_socket_path):
-            os.remove(qmp_socket_path)
 
 def qemu_debug(debug_command, delay):
     qemu = subprocess.Popen(
