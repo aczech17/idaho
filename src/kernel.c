@@ -5,6 +5,7 @@
 #include "io/usb_device.h"
 #include "vga/vga.h"
 #include "io/usb_controller.h"
+#include "io/usb_device_manager.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -55,12 +56,15 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     setup_idt(idt);
     vga_printf("\nIDT set up.%z\n");
 
-    USB_Controller xhci_info = setup_usb_controller();
-	if (!xhci_info.found)
+    USB_Controller usb_controller = setup_usb_controller();
+	if (!usb_controller.found)
 	{
 		panic("Could not configure USB controller.");
 	}
     vga_printf("USB controller set up.\n\n");
+
+	USB_Device_Manager dvm;
+	setup_usb_device_manager(&dvm, &usb_controller);
 
 	//
 	// USB_Device keyboard_driver;

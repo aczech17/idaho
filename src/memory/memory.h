@@ -3,6 +3,7 @@
 
 #include "../common.h"
 
+#define MAX_PHYS_MEM_SIZE (1ULL << 35)
 #define FRAME_SIZE (1 << 12)        // 4 KiB
 
 typedef u64 Phys_addr;

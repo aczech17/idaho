@@ -9,6 +9,7 @@
     max frame count = 32GiB/4KiB = 8Mi
     8Mi frames -> 8Mi entries -> 8Mib -> 1MiB
 */
+#define MAX_FRAME_NUM ((1 << 23) - 1)
 #define FRAME_BITMAP_SIZE (1 << 20)
 
 typedef struct
