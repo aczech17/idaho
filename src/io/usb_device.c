@@ -3,37 +3,39 @@
 #include "../memory/arena_allocator.h"
 #include "../memory/page_table.h"
 
-static bool detect_usb_device_connected(XHCI_Info* xhci, u32 event[4], u8* port_id)
-{
-	const u32 PORT_STATUS_CHANGED = 34;
 
-	u32 event_type = (event[3] >> 10) & 0x3F;
-	if (event_type != PORT_STATUS_CHANGED)
-		return false;
 
-	u8 _port_id = (event[0] >> 24) & 0xFF;
-	if (_port_id == 0 || _port_id > xhci->max_ports)
-		return false;
+// static bool detect_usb_device_connected(USB_Controller* xhci, u32 event[4], u8* port_id)
+// {
+// 	const u32 PORT_STATUS_CHANGED = 34;
+//
+// 	u32 event_type = (event[3] >> 10) & 0x3F;
+// 	if (event_type != PORT_STATUS_CHANGED)
+// 		return false;
+//
+// 	u8 _port_id = (event[0] >> 24) & 0xFF;
+// 	if (_port_id == 0 || _port_id > xhci->max_ports)
+// 		return false;
+//
+// 	u32 portsc_index = 256 + (_port_id - 1) * 4;
+// 	u32 portsc = xhci->op_regs[portsc_index];
+//
+// 	bool connected = (portsc & 1U) != 0;
+// 	bool connection_changed = (portsc & (1 << 17U)) != 0;
+//
+// 	if (connection_changed && connected)
+// 	{
+// 		*port_id = _port_id;
+// 		return true;
+// 	}
+//
+// 	return false;
+// }
 
-	u32 portsc_index = 256 + (_port_id - 1) * 4;
-	u32 portsc = xhci->op_regs[portsc_index];
-
-	bool connected = (portsc & 1U) != 0;
-	bool connection_changed = (portsc & (1 << 17U)) != 0;
-
-	if (connection_changed && connected)
-	{
-		*port_id = _port_id;
-		return true;
-	}
-
-	return false;
-}
-
-static bool reset_port(XHCI_Info* xhci_info, u8 port_id)
+static bool reset_port(USB_Controller* usb_controller, u8 port_id)
 {
 	u32 portsc_index = 256 + (port_id - 1) * 4;
-	volatile u32* portsc = &xhci_info->op_regs[portsc_index];
+	volatile u32* portsc = &usb_controller->op_regs[portsc_index];
 
 	const u32 CCS	= 1 << 0;
 	const u32 PED	= 1 << 1;
@@ -70,18 +72,6 @@ static bool reset_port(XHCI_Info* xhci_info, u8 port_id)
 	return success;
 }
 
-static void enable_slot(USB_Device* device)
-{
-	u8 slot_type = 0;
-
-	u32 enable_slot_command[4] = {0};
-	enable_slot_command[3] = 9 << 10;
-	enable_slot_command[3] |= (slot_type << 16);
-
-	write_command_trb(device->xhci_info, enable_slot_command);
-	doorbell_command_ring(device->xhci_info);
-}
-
 static bool detect_command_completion(const u32 event_trb[4], u8* completion_code, u8* slot_id)
 {
 	const u32 COMMAND_COMPLETION_EVENT = 33;
@@ -96,31 +86,42 @@ static bool detect_command_completion(const u32 event_trb[4], u8* completion_cod
 	return true;
 }
 
-static bool acquire_port(USB_Device* device)
-{
-	u32 event[4];
-	while (1)
-	{
-		while (!read_event_trb(device->xhci_info, event)) {}
-		update_event_ring_dequeue_pointer(device->xhci_info);
-
-		if (!detect_usb_device_connected(device->xhci_info, event, &device->port_id))
-			continue;
-
-		bool reset_status = reset_port(device->xhci_info, device->port_id);
-		return reset_status;
-	}
-}
+// static bool acquire_port(USB_Device* device)
+// {
+// 	u32 event[4];
+// 	while (1)
+// 	{
+// 		while (!read_event_trb(device->usb_controller, event)) {}
+// 		update_event_ring_dequeue_pointer(device->usb_controller);
+//
+// 		if (!detect_usb_device_connected(device->usb_controller, event, &device->port_id))
+// 			continue;
+//
+// 		bool reset_status = reset_port(device->usb_controller, device->port_id);
+// 		return reset_status;
+// 	}
+// }
 
 static bool acquire_slot(USB_Device* device)
 {
+	// Request a slot from the USB controller.
+	u8 slot_type = 0;
+
+	u32 enable_slot_command[4] = {0};
+	enable_slot_command[3] = 9 << 10;
+	enable_slot_command[3] |= (slot_type << 16);
+
+	write_command_trb(device->usb_controller, enable_slot_command);
+	doorbell_command_ring(device->usb_controller);
+
+
+	// Now wait for the slot.
 	u32 event[4];
 	u8 completion_code;
-
 	while (1)
 	{
-		while (!read_event_trb(device->xhci_info, event)) {}
-		update_event_ring_dequeue_pointer(device->xhci_info);
+		while (!read_event_trb(device->usb_controller, event)) {}
+		update_event_ring_dequeue_pointer(device->usb_controller);
 
 		if (!detect_command_completion(event, &completion_code, &device->slot_id))
 			continue;
@@ -141,7 +142,7 @@ static void setup_device_context(USB_Device* device)
 	device->device_context_phys_addr = ctxt_phys_addr;
 
 	// The XHCI controller should also know this address.
-	volatile u64* controller_dcbaa = (volatile u64*)(device->xhci_info->dcbaa_virt_addr);
+	volatile u64* controller_dcbaa = (volatile u64*)(device->usb_controller->dcbaa_virt_addr);
 	controller_dcbaa[device->slot_id] = ctxt_phys_addr;
 }
 
@@ -188,14 +189,14 @@ static void setup_input_context(USB_Device* device)
 		or times 2 if context size == 64
 	*/
 	u32* input_slot_context = (u32*)(device->input_context_virt_addr) +
-								(device->xhci_info->context_size_64 ? 16 : 8);
+								(device->usb_controller->context_size_64 ? 16 : 8);
 	input_slot_context[0] = (1U << 27) // Context entries == 1
 							| ((u32)device->port_speed << 20);
 
 	input_slot_context[1] = (u32)(device->port_id) << 16;
 
 	u32* input_endpoint0_context = (u32*)(device->input_context_virt_addr) +
-									(device->xhci_info->context_size_64 ? 32 : 16);
+									(device->usb_controller->context_size_64 ? 32 : 16);
 	switch (device->port_speed)
 	{
 		case 1:
@@ -242,8 +243,8 @@ static void address_device(USB_Device* device)
 		| ((u32)(device->slot_id) << 24);
 
 	// Now let's send it.
-	write_command_trb(device->xhci_info, request_trb);
-	doorbell_command_ring(device->xhci_info);
+	write_command_trb(device->usb_controller, request_trb);
+	doorbell_command_ring(device->usb_controller);
 
 	u8 completion_code;
 	u8 slot_id_received;
@@ -251,8 +252,8 @@ static void address_device(USB_Device* device)
 
 	while (1)
 	{
-		while (!read_event_trb(device->xhci_info, event_trb)) {} // Wait till something comes.
-		update_event_ring_dequeue_pointer(device->xhci_info);	// Something has come.
+		while (!read_event_trb(device->usb_controller, event_trb)) {} // Wait till something comes.
+		update_event_ring_dequeue_pointer(device->usb_controller);	// Something has come.
 
 		// Check if completion respond has arrived.
 		if (!detect_command_completion(event_trb, &completion_code, &slot_id_received))
@@ -268,19 +269,19 @@ static void address_device(USB_Device* device)
 	}
 }
 
-bool setup_usb_device(USB_Device* device, XHCI_Info* xhci)
+bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id)
 {
-	device->xhci_info = xhci;
+	device->usb_controller = usb_controller;
+	device->port_id = port_id;
 
-	if (!acquire_port(device))
+	if (!reset_port(usb_controller, port_id))
 		return false;
 
-	enable_slot(device);
 	if (!acquire_slot(device))
 		return false;
 
 	u32 portsc_index = 256 + (device->port_id - 1) * 4;
-	u32 portsc = xhci->op_regs[portsc_index];
+	u32 portsc = usb_controller->op_regs[portsc_index];
 	device->port_speed = (portsc >> 10) & 0xF;
 
 	setup_device_context(device);

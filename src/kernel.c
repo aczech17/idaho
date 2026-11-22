@@ -4,7 +4,7 @@
 #include "interrupt/idt.h"
 #include "io/usb_device.h"
 #include "vga/vga.h"
-#include "io/xhci.h"
+#include "io/usb_controller.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -55,19 +55,19 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     setup_idt(idt);
     vga_printf("\nIDT set up.%z\n");
 
-    XHCI_Info xhci_info = setup_xhci();
+    USB_Controller xhci_info = setup_usb_controller();
 	if (!xhci_info.found)
 	{
-		panic("Could not configure XHCI controller.");
+		panic("Could not configure USB controller.");
 	}
-    vga_printf("XHCI set up.\n\n");
+    vga_printf("USB controller set up.\n\n");
 
-
-	USB_Device keyboard_driver;
-	setup_usb_device(&keyboard_driver, &xhci_info);
-
-	vga_printf("USB setup completed.\n");
-	vga_printf("port: %X, slot: %X\n", keyboard_driver.port_id, keyboard_driver.slot_id);
+	//
+	// USB_Device keyboard_driver;
+	// setup_usb_device(&keyboard_driver, &xhci_info);
+	//
+	// vga_printf("USB setup completed.\n");
+	// vga_printf("port: %X, slot: %X\n", keyboard_driver.port_id, keyboard_driver.slot_id);
 
     for (;;);
 }

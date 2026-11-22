@@ -160,7 +160,7 @@
     "output": "out/kernel.bin"
   },
   {
-    "file": "src/io/xhci.c",
+    "file": "src/io/usb_controller.c",
     "arguments": [
       "/usr/bin/gcc",
       "-std=c11",

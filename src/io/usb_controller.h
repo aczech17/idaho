@@ -1,11 +1,19 @@
-#ifndef IO_XHCI_H
-#define IO_XHCI_H
+#ifndef IO_USB_CONTROLLER_H
+#define IO_USB_CONTROLLER_H
 
 #include "../common.h"
 #include <stdbool.h>
 #include "../memory/memory.h"
 
 #define XHCI_SIGNATURE 0x0C0330
+
+typedef enum
+{
+	USB_PORT_DISCONNECTED,
+	USB_PORT_CONNECTED,
+	USB_PORT_INITIALIZING,
+	USB_PORT_INITIALIZED,
+}USB_Port_state;
 
 typedef struct
 {
@@ -43,18 +51,20 @@ typedef struct
 	Phys_addr command_ring_phys_addr;
 	u64 command_ring_trb_index;
 	bool command_ring_cycle_state;
-}XHCI_Info;
+
+	USB_Port_state* usb_port_states;
+}USB_Controller;
 
 u32 pci_read_config(u8 bus, u8 device, u8 function, u8 offset);
 void pci_write_config_16_bit(u8 bus, u8 device, u8 function, u8 offset, u16 value);
 void pci_write_config_32_bit(u8 bus, u8 device, u8 function, u8 offset, u32 value);
 
-XHCI_Info setup_xhci(void);
+USB_Controller setup_usb_controller(void);
 
-bool read_event_trb(XHCI_Info*, u32 event_trb[4]);
-void update_event_ring_dequeue_pointer(XHCI_Info* info);
+bool read_event_trb(USB_Controller*, u32 event_trb[4]);
+void update_event_ring_dequeue_pointer(USB_Controller* controller);
 
-bool write_command_trb(XHCI_Info*, u32 command_trb[4]);
-void doorbell_command_ring(XHCI_Info*);
+bool write_command_trb(USB_Controller*, u32 command_trb[4]);
+void doorbell_command_ring(USB_Controller*);
 
-#endif // IO_XHCI_H
+#endif // IO_USB_CONTROLLER_H

@@ -1,11 +1,11 @@
 #ifndef IO_USB_DEVICE_H
 #define IO_USB_DEVICE_H
 
-#include "xhci.h"
+#include "usb_controller.h"
 
 typedef struct
 {
-	XHCI_Info* xhci_info;
+	USB_Controller* usb_controller;
 
 	u8 port_id;
 	u8 slot_id;
@@ -28,6 +28,6 @@ typedef struct
 
 }USB_Device;
 
-bool setup_usb_device(USB_Device*, XHCI_Info*);
+bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);
 
 #endif // IO_USB_DEVICE_H
