@@ -238,5 +238,45 @@
     ],
     "directory": "/home/tytjan/Programowanie/idaho",
     "output": "out/kernel.bin"
+  },
+  {
+    "file": "src/io/usb_interface.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-std=c11",
+      "-ffreestanding",
+      "-fno-pie",
+      "-fno-pic",
+      "-fno-stack-protector",
+      "-fno-asynchronous-unwind-tables",
+      "-mno-red-zone",
+      "-Wall",
+      "-Wextra",
+      "src/interrupt/idt.c",
+      "-o",
+      "out/kernel.bin"
+    ],
+    "directory": "/home/tytjan/Programowanie/idaho",
+    "output": "out/kernel.bin"
+  },
+  {
+    "file": "src/io/usb_interface_endpoint.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-std=c11",
+      "-ffreestanding",
+      "-fno-pie",
+      "-fno-pic",
+      "-fno-stack-protector",
+      "-fno-asynchronous-unwind-tables",
+      "-mno-red-zone",
+      "-Wall",
+      "-Wextra",
+      "src/interrupt/idt.c",
+      "-o",
+      "out/kernel.bin"
+    ],
+    "directory": "/home/tytjan/Programowanie/idaho",
+    "output": "out/kernel.bin"
   }
 ]

@@ -2,6 +2,9 @@
 #define IO_USB_DEVICE_H
 
 #include "usb_controller.h"
+#include "usb_interface.h"
+
+// USB_Controller → USB_Device → USB_Interface → USB_Interface_Endpoint
 
 typedef struct
 {
@@ -42,8 +45,9 @@ typedef struct
 	// Configuration Descriptor
 	u16 config_total_length;
 	u8 config_value;
-	u8 num_interfaces;
+	u8 interfaces_count;
 
+	USB_Interface* interfaces;
 	Virt_addr config_descriptor;
 }USB_Device;
 

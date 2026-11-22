@@ -3,7 +3,11 @@
 #include "../memory/arena_allocator.h"
 #include "../memory/page_table.h"
 
-
+#define DEVICE_DESCRIPTOR 1
+#define CONFIG_DESCRIPTOR 2
+#define STRING_DESCRIPTOR 3
+#define INTERFACE_DESCRIPTOR 4
+#define ENDPOINT_DESCRIPTOR 5
 
 // static bool detect_usb_device_connected(USB_Controller* xhci, u32 event[4], u8* port_id)
 // {
@@ -409,7 +413,7 @@ static bool parse_device_descriptor(USB_Device* device)
 	return true;
 }
 
-static bool parse_configuration_descriptor(USB_Device* device)
+static bool parse_config_descriptor(USB_Device* device)
 {
 	const u8* descriptor = (const u8*)device->received_descriptor_virt_addr;
 
@@ -423,7 +427,7 @@ static bool parse_configuration_descriptor(USB_Device* device)
 		return false;
 
 	device->config_total_length = total_length;
-	device->num_interfaces = descriptor[4];
+	device->interfaces_count = descriptor[4];
 	device->config_value = descriptor[5];
 
 	return true;
@@ -451,16 +455,24 @@ bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 por
 	if (!allocate_mem_for_descriptor(device))
 		return false;
 
-	get_descriptor(device, 1, 18); // get device descriptor
+	get_descriptor(device, DEVICE_DESCRIPTOR, 18); // get device descriptor
 	if (!parse_device_descriptor(device))
 		panic("Invalid USB device descriptor.");
 
-	get_descriptor(device, 2, 9);// get configuration descriptor
-	if (!parse_configuration_descriptor(device))
+	get_descriptor(device, CONFIG_DESCRIPTOR, 9);// get configuration descriptor
+	if (!parse_config_descriptor(device))
 		panic("Invalid USB config descriptor.");
 
-	get_descriptor(device, 2, device->config_total_length);
+	get_descriptor(device, CONFIG_DESCRIPTOR, device->config_total_length);
 	device->config_descriptor = device->received_descriptor_virt_addr;
+
+	// USB_Controller → USB_Device → USB_Interface → USB_Interface_Endpoint
+	// Parse all this shit.
+	for (u8 intf_num = 0; intf_num < device->interfaces_count; ++intf_num)
+	{
+
+	}
+
 
 	return true;
 }
