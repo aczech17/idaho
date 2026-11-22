@@ -269,6 +269,120 @@ static void address_device(USB_Device* device)
 	}
 }
 
+static bool allocate_mem_for_descriptor(USB_Device* device)
+{
+	const u64 max_config_descriptor_size = 65535;
+	const u64 frames_to_allocate = (max_config_descriptor_size + FRAME_SIZE - 1) / FRAME_SIZE;
+
+	Phys_addr phys_addr = allocate_contiguous_general_frames(frames_to_allocate, MAX_FRAME_NUM);
+	Virt_addr virt_addr = arena_allocate_pages(&xhci_driver_page_allocator, frames_to_allocate);
+	if (phys_addr == INVALID_ADDR || virt_addr == INVALID_ADDR)
+		return false;
+
+	for (u64 frame = 0; frame < frames_to_allocate; ++frame)
+	{
+		Virt_addr virt = virt_addr + frame * FRAME_SIZE;
+		Phys_addr phys = phys_addr + frame * FRAME_SIZE;
+
+		if (!map_address(virt, phys, PTE_WRITABLE))
+			return false;
+	}
+
+
+	device->received_descriptor_virt_addr = virt_addr;
+	device->received_descriptor_phys_addr = phys_addr;
+
+	return true;
+}
+
+static void write_ep0_trb(USB_Device* device, const u32 trb[4])
+{
+	volatile u32* ring = (volatile u32*)(device->ep0_transfer_ring_virt_addr);
+	u16 index = device->ep0_transfer_ring_trb_index;
+	bool cycle_state = device->ep0_transfer_ring_cycle_state;
+
+	volatile u32* entry = &ring[index * 4];
+	for (u32 i = 0; i < 3; ++i)
+		entry[i] = trb[i];
+
+	entry[3] = cycle_state ? (trb[3] | 1) : (trb[3] & ~1);
+
+	++index;
+
+	if (index == 255)
+	{
+		volatile u32* link_trb = &ring[255 * 4];
+		link_trb[3] = cycle_state ? (link_trb[3] | 1) : (link_trb[3] & ~1);
+
+		device->ep0_transfer_ring_trb_index = 0;
+		device->ep0_transfer_ring_cycle_state = !cycle_state;
+	}
+	else
+	{
+		device->ep0_transfer_ring_trb_index = index;
+	}
+}
+
+static void get_descriptor(USB_Device* device, u8 descriptor_type, u32 descriptor_size)
+{
+	u32 setup_trb[4] = {0};
+
+	setup_trb[0] = 0x80U		// (device to host)
+		| (6U << 8)				// bRequest = 6 (get descriptor)
+		| ((u32)descriptor_type << 24);
+
+	setup_trb[1] = descriptor_size << 16;
+	setup_trb[2] = 8;	// TRB transfer length = 8 (setup packet)
+
+	setup_trb[3] = (3U << 16) // TRT = 3 (IN)
+		| (2U << 10)			// TRB type = 2 (setup stage)
+		| (1U << 6);		// IDT = 1 (immediate data)
+
+
+	u32 data_trb[4] = {0};
+
+	data_trb[0] = (u32)(device->received_descriptor_phys_addr);
+	data_trb[1] = (u32)(device->received_descriptor_phys_addr >> 32);
+
+	data_trb[2] = descriptor_size;
+
+	data_trb[3] = (3U << 10)	// TRB type = 3 (data stage)
+				| (1U << 16);	// DIR = 1 (IN)
+
+	u32 status_trb[4] = {0};
+	status_trb[3] = (4U << 10)	// TRB type = 4 (status stage)
+	              | (1U << 5);	// IOC = 1 (interrupt on completion)
+								// DIR = 0 (OUT)
+
+	write_ep0_trb(device, setup_trb);
+	write_ep0_trb(device, data_trb);
+	write_ep0_trb(device, status_trb);
+
+	doorbell_ring(device->usb_controller, device->slot_id, 1);
+
+	u32 received_trb[4];
+	while (1)
+	{
+		while (!read_event_trb(device->usb_controller, received_trb));
+		update_event_ring_dequeue_pointer(device->usb_controller);
+
+		u8 trb_type = (received_trb[3] >> 10) & 0x3F;
+		u8 endpoint_id = (received_trb[3] >> 16) & 0x1F;
+		u8 slot_id = (received_trb[3] >> 24) & 0xFF;
+
+
+		bool it_is_for_us = (trb_type == 32) && (endpoint_id == 1) && (slot_id == device->slot_id);
+		if (!it_is_for_us)
+			continue;
+
+		u8 completion_code = (received_trb[2] >> 24) & 0xFF;
+		if (completion_code != 1)
+			panic("USB device get descriptor failed.");
+
+		break;
+	}
+}
+
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id)
 {
 	device->usb_controller = usb_controller;
@@ -287,6 +401,13 @@ bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 por
 	setup_device_context(device);
 	setup_input_context(device);
 	address_device(device);
+
+	if (!allocate_mem_for_descriptor(device))
+		return false;
+
+	get_descriptor(device, 1, 18); // get device descriptor
+
+
 
 	return true;
 }

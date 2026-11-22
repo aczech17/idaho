@@ -503,12 +503,17 @@ bool write_command_trb(USB_Controller* controller, u32 command_trb[4])
 	return true;
 }
 
-void doorbell_command_ring(USB_Controller* controller)
+void doorbell_ring(USB_Controller* controller, u32 slot_id, u32 value)
 {
 	volatile u32* dboff_reg = (volatile u32*)(controller->mmio_addr + 0x14);
 	u32 dboff_offset = *dboff_reg & ~3;
 	volatile u32* doorbell = (volatile u32*)(controller->mmio_addr + dboff_offset);
 
 	__atomic_thread_fence(__ATOMIC_RELEASE);
-	doorbell[0] = 0;
+	doorbell[slot_id] = value;
+}
+
+void doorbell_command_ring(USB_Controller* controller)
+{
+	doorbell_ring(controller, 0, 0);
 }

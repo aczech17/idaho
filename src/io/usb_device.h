@@ -26,6 +26,8 @@ typedef struct
 	// Endpoint 0
 	u16 ep0_max_packet_size;
 
+	Phys_addr received_descriptor_phys_addr;
+	Virt_addr received_descriptor_virt_addr;
 }USB_Device;
 
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);

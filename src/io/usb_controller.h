@@ -65,6 +65,7 @@ bool read_event_trb(USB_Controller*, u32 event_trb[4]);
 void update_event_ring_dequeue_pointer(USB_Controller* controller);
 
 bool write_command_trb(USB_Controller*, u32 command_trb[4]);
+void doorbell_ring(USB_Controller* controller, u32 slot_id, u32 value);
 void doorbell_command_ring(USB_Controller*);
 
 #endif // IO_USB_CONTROLLER_H
