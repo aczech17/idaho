@@ -383,6 +383,52 @@ static void get_descriptor(USB_Device* device, u8 descriptor_type, u32 descripto
 	}
 }
 
+static bool parse_device_descriptor(USB_Device* device)
+{
+	const u8* descriptor = (u8*)(device->received_descriptor_virt_addr);
+
+	if (descriptor[0] != 18 || descriptor[1] != 1)
+		return false;
+
+	device->device_class = descriptor[4];
+	device->device_subclass = descriptor[5];
+	device->device_protocol = descriptor[6];
+
+	device->ep0_max_packet_size = descriptor[7] == 9
+		? 512
+		: descriptor[7];
+
+	device->vendor_id = (u16)descriptor[8]
+					  | ((u16)descriptor[9] << 8);
+
+	device->product_id = (u16)descriptor[10]
+					   | ((u16)descriptor[11] << 8);
+
+	device->num_configurations = descriptor[17];
+
+	return true;
+}
+
+static bool parse_configuration_descriptor(USB_Device* device)
+{
+	const u8* descriptor = (const u8*)device->received_descriptor_virt_addr;
+
+	if (descriptor[0] != 9 || descriptor[1] != 2)
+		return false;
+
+	u16 total_length = (u16)descriptor[2]
+					 | ((u16)descriptor[3] << 8);
+
+	if (total_length < 9)
+		return false;
+
+	device->config_total_length = total_length;
+	device->num_interfaces = descriptor[4];
+	device->config_value = descriptor[5];
+
+	return true;
+}
+
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id)
 {
 	device->usb_controller = usb_controller;
@@ -406,8 +452,15 @@ bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 por
 		return false;
 
 	get_descriptor(device, 1, 18); // get device descriptor
+	if (!parse_device_descriptor(device))
+		panic("Invalid USB device descriptor.");
 
+	get_descriptor(device, 2, 9);// get configuration descriptor
+	if (!parse_configuration_descriptor(device))
+		panic("Invalid USB config descriptor.");
 
+	get_descriptor(device, 2, device->config_total_length);
+	device->config_descriptor = device->received_descriptor_virt_addr;
 
 	return true;
 }

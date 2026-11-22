@@ -28,6 +28,23 @@ typedef struct
 
 	Phys_addr received_descriptor_phys_addr;
 	Virt_addr received_descriptor_virt_addr;
+
+	// Device Descriptor
+	u16 vendor_id;
+	u16 product_id;
+
+	u8 device_class;
+	u8 device_subclass;
+	u8 device_protocol;
+
+	u8 num_configurations;
+
+	// Configuration Descriptor
+	u16 config_total_length;
+	u8 config_value;
+	u8 num_interfaces;
+
+	Virt_addr config_descriptor;
 }USB_Device;
 
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);
