@@ -66,11 +66,8 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	USB_Device keyboard_driver;
 	setup_usb_device(&keyboard_driver, &xhci_info);
 
-
+	vga_printf("USB setup completed.\n");
 	vga_printf("port: %X, slot: %X\n", keyboard_driver.port_id, keyboard_driver.slot_id);
-
-
-
 
     for (;;);
 }

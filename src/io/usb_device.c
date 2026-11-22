@@ -70,14 +70,16 @@ static bool reset_port(XHCI_Info* xhci_info, u8 port_id)
 	return success;
 }
 
-static void enable_slot(XHCI_Info* info, u8 slot_type)
+static void enable_slot(USB_Device* device)
 {
+	u8 slot_type = 0;
+
 	u32 enable_slot_command[4] = {0};
 	enable_slot_command[3] = 9 << 10;
 	enable_slot_command[3] |= (slot_type << 16);
 
-	write_command_trb(info, enable_slot_command);
-	doorbell_command_ring(info);
+	write_command_trb(device->xhci_info, enable_slot_command);
+	doorbell_command_ring(device->xhci_info);
 }
 
 static bool detect_command_completion(const u32 event_trb[4], u8* completion_code, u8* slot_id)
@@ -92,6 +94,39 @@ static bool detect_command_completion(const u32 event_trb[4], u8* completion_cod
 	*slot_id = (event_trb[3] >> 24) & 0xFF;
 
 	return true;
+}
+
+static bool acquire_port(USB_Device* device)
+{
+	u32 event[4];
+	while (1)
+	{
+		while (!read_event_trb(device->xhci_info, event)) {}
+		update_event_ring_dequeue_pointer(device->xhci_info);
+
+		if (!detect_usb_device_connected(device->xhci_info, event, &device->port_id))
+			continue;
+
+		bool reset_status = reset_port(device->xhci_info, device->port_id);
+		return reset_status;
+	}
+}
+
+static bool acquire_slot(USB_Device* device)
+{
+	u32 event[4];
+	u8 completion_code;
+
+	while (1)
+	{
+		while (!read_event_trb(device->xhci_info, event)) {}
+		update_event_ring_dequeue_pointer(device->xhci_info);
+
+		if (!detect_command_completion(event, &completion_code, &device->slot_id))
+			continue;
+
+		return completion_code == 1;
+	}
 }
 
 static void setup_device_context(USB_Device* device)
@@ -231,59 +266,26 @@ static void address_device(USB_Device* device)
 
 		break;
 	}
-
-	vga_printf("Address device completed.\n");
 }
 
 bool setup_usb_device(USB_Device* device, XHCI_Info* xhci)
 {
 	device->xhci_info = xhci;
 
-	u32 event[4];
+	if (!acquire_port(device))
+		return false;
 
-	// Acquire port ID.
-	while (1)
-	{
-		while (!read_event_trb(xhci, event)) {}
-		update_event_ring_dequeue_pointer(xhci);
-
-		if (!detect_usb_device_connected(xhci, event, &device->port_id))
-			continue;
-
-		if (reset_port(xhci, device->port_id))
-		{
-			// vga_printf("Port %X reset success.\n", device->port_id);
-			break;
-		}
-	}
-
-	enable_slot(xhci, 0);
-
-	u8 completion_code;
-	while (1)
-	{
-		while (!read_event_trb(xhci, event)) {}
-		update_event_ring_dequeue_pointer(xhci);
-
-		if (detect_command_completion(event, &completion_code, &device->slot_id))
-		{
-			if (!completion_code)
-				return false;
-
-			break;
-		}
-	}
-	// Port reset complete.
+	enable_slot(device);
+	if (!acquire_slot(device))
+		return false;
 
 	u32 portsc_index = 256 + (device->port_id - 1) * 4;
 	u32 portsc = xhci->op_regs[portsc_index];
-
 	device->port_speed = (portsc >> 10) & 0xF;
 
 	setup_device_context(device);
 	setup_input_context(device);
 	address_device(device);
-
 
 	return true;
 }
