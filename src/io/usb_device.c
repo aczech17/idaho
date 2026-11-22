@@ -90,22 +90,6 @@ static bool detect_command_completion(const u32 event_trb[4], u8* completion_cod
 	return true;
 }
 
-// static bool acquire_port(USB_Device* device)
-// {
-// 	u32 event[4];
-// 	while (1)
-// 	{
-// 		while (!read_event_trb(device->usb_controller, event)) {}
-// 		update_event_ring_dequeue_pointer(device->usb_controller);
-//
-// 		if (!detect_usb_device_connected(device->usb_controller, event, &device->port_id))
-// 			continue;
-//
-// 		bool reset_status = reset_port(device->usb_controller, device->port_id);
-// 		return reset_status;
-// 	}
-// }
-
 static bool acquire_slot(USB_Device* device)
 {
 	// Request a slot from the USB controller.
