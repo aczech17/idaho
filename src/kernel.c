@@ -65,9 +65,9 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 
 	USB_Device_Manager dvm;
 	if (setup_usb_device_manager(&dvm, &usb_controller))
-		vga_printf("Keyboard found.\n");
+		vga_printf("%ZKeyboard found.\n%z", 0x0A);
 	else
-		vga_printf("Keyboard not found\n");
+		vga_printf("%ZKeyboard not found\n%z", 0x04);
 
 	// USB_Device keyboard_driver;
 	// setup_usb_device(&keyboard_driver, &xhci_info);

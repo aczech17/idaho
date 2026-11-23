@@ -79,7 +79,7 @@
 // 	return false;
 // }
 
-static USB_Interface* find_keyboard_interface(USB_Device* device)
+static i16 find_keyboard_interface_number(USB_Device* device)
 {
 	// USB_Interface* interface = NULL;
 
@@ -88,15 +88,15 @@ static USB_Interface* find_keyboard_interface(USB_Device* device)
 	const u8 KEYBOARD_PROTOCOL = 0x01;
 
 
-	for (u32 intf_num = 0; intf_num < device->interfaces_count; ++intf_num)
+	for (u8 intf_num = 0; intf_num < device->interfaces_count; ++intf_num)
 	{
 		USB_Interface* interface = &device->interfaces[intf_num];
 
 		if (interface->class == HID_CLASS && interface->subclass == BOOT_INTERFACE_SUBCLASS && interface->protocol == KEYBOARD_PROTOCOL)
-			return interface;
+			return intf_num;
 	}
 
-	return NULL;
+	return -1;
 }
 
 bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* controller)
@@ -122,16 +122,65 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 			continue;
 		}
 
-		USB_Interface* keyboard_interface = find_keyboard_interface(&device);
-		if (!keyboard_interface)
+		i16 keyboard_interface_number = find_keyboard_interface_number(&device);
+		if (keyboard_interface_number < 0)
 			continue;
 
 
 		manager->keyboard_device = device;
-		manager->keyboard_interface = keyboard_interface;
+		manager->keyboard_interface_index = keyboard_interface_number;
 
-		return true;
+		break;
+	}
+	if (manager->keyboard_interface_index < 0)
+		return false;
+
+	USB_Interface* keyboard_interface = &manager->keyboard_device.interfaces[manager->keyboard_interface_index];
+
+
+	u8 interrupt_in_ep_num = 0;
+	bool interrupt_in_ep_num_found = false;
+	for (u8 ep_i = 0; ep_i < keyboard_interface->endpoint_count; ++ep_i)
+	{
+		u8 addr = keyboard_interface->endpoints[ep_i].endpoint_address;
+		u8 attrs = keyboard_interface->endpoints[ep_i].attributes;
+
+		if ((addr & 0x80) != 0 && (attrs & 0x03) == 0x03)
+		{
+			interrupt_in_ep_num = ep_i;
+			interrupt_in_ep_num_found = true;
+			break;
+		}
 	}
 
-	return false;
+	if (!interrupt_in_ep_num_found)
+		return false;
+
+	USB_Interface_Endpoint* ep = &keyboard_interface->endpoints[interrupt_in_ep_num];
+	u8 endpoint_address = ep->endpoint_address;
+	u8 endpoint_number = endpoint_address & 0x0F;
+	u8 controller_ep_id = 2 * endpoint_number + 1;
+
+	if (!set_up_usb_interface_ep_buffs(ep))
+		return false;
+
+
+
+
+	if (!set_configuration(&manager->keyboard_device))
+		return false;
+
+	if (!set_protocol(&manager->keyboard_device, keyboard_interface->number))
+		return false;
+
+
+
+
+
+
+
+
+	vga_printf("EP id: %x\n", controller_ep_id);
+
+	return true;
 }

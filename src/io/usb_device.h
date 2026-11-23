@@ -52,5 +52,7 @@ typedef struct
 }USB_Device;
 
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);
+bool set_configuration(USB_Device* device);
+bool set_protocol(USB_Device* device, u8 interface_number);
 
 #endif // IO_USB_DEVICE_H

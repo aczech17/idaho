@@ -9,6 +9,9 @@
 #define INTERFACE_DESCRIPTOR 4
 #define ENDPOINT_DESCRIPTOR 5
 
+#define TRANSFER_EVENT ((u32)(32))
+#define COMMAND_COMPLETION_EVENT ((u32)(33))
+
 // static bool detect_usb_device_connected(USB_Controller* xhci, u32 event[4], u8* port_id)
 // {
 // 	const u32 PORT_STATUS_CHANGED = 34;
@@ -76,18 +79,14 @@ static bool reset_port(USB_Controller* usb_controller, u8 port_id)
 	return success;
 }
 
-static bool detect_command_completion(const u32 event_trb[4], u8* completion_code, u8* slot_id)
+static void decode_event_trb(const u32 event_trb[4], u8* completion_code, u8* slot_id, u8* event_type, u8* endpoint_id)
 {
-	const u32 COMMAND_COMPLETION_EVENT = 33;
-
-	u32 event_type = (event_trb[3] >> 10) & 0x3F;
-	if (event_type != COMMAND_COMPLETION_EVENT)
-		return false;
-
+	*event_type = (event_trb[3] >> 10) & 0x3F;
 	*completion_code = (event_trb[2] >> 24) & 0xFF;
 	*slot_id = (event_trb[3] >> 24) & 0xFF;
 
-	return true;
+	if (endpoint_id)
+		*endpoint_id = (event_trb[3] >> 16) & 0x1F;
 }
 
 static bool acquire_slot(USB_Device* device)
@@ -106,12 +105,16 @@ static bool acquire_slot(USB_Device* device)
 	// Now wait for the slot.
 	u32 event[4];
 	u8 completion_code;
+	u8 event_type;
+
 	while (1)
 	{
 		while (!read_event_trb(device->usb_controller, event)) {}
-		update_event_ring_dequeue_pointer(device->usb_controller);
 
-		if (!detect_command_completion(event, &completion_code, &device->slot_id))
+		update_event_ring_dequeue_pointer(device->usb_controller);
+		decode_event_trb(event, &completion_code, &device->slot_id, &event_type, NULL);
+
+		if (event_type != COMMAND_COMPLETION_EVENT)
 			continue;
 
 		return completion_code == 1;
@@ -236,18 +239,17 @@ static void address_device(USB_Device* device)
 
 	u8 completion_code;
 	u8 slot_id_received;
+	u8 event_type;
 	u32 event_trb[4];
 
 	while (1)
 	{
 		while (!read_event_trb(device->usb_controller, event_trb)) {} // Wait till something comes.
+
 		update_event_ring_dequeue_pointer(device->usb_controller);	// Something has come.
+		decode_event_trb(event_trb, &completion_code, &slot_id_received, &event_type, NULL);
 
-		// Check if completion respond has arrived.
-		if (!detect_command_completion(event_trb, &completion_code, &slot_id_received))
-			continue;
-
-		if (slot_id_received != device->slot_id) // It's not for us.
+		if (event_type != COMMAND_COMPLETION_EVENT || slot_id_received != device->slot_id) // It's not for us.
 			continue;
 
 		if (completion_code != 1)
@@ -437,7 +439,6 @@ static bool allocate_interfaces(USB_Device* device)
 	return true;
 }
 
-
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id)
 {
 	device->usb_controller = usb_controller;
@@ -542,3 +543,83 @@ bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 por
 
 	return true;
 }
+
+static bool send_to_ep0_and_acknowledge(USB_Device* device, u32** trbs, u8 trbs_count, u8 event_type)
+{
+	const u8 EP0_ID = 1;
+
+	for (u8 i = 0; i < trbs_count; ++i)
+		write_ep0_trb(device, trbs[i]);
+
+	doorbell_ring(device->usb_controller, device->slot_id, EP0_ID);
+
+	// Wait for completion.
+	u32 event_trb[4];
+	u8 received_slot_id, completion_code, received_event_type, received_endpoint_id;
+	while (1)
+	{
+		while (!read_event_trb(device->usb_controller, event_trb)) {}
+		update_event_ring_dequeue_pointer(device->usb_controller);
+
+		decode_event_trb(event_trb, &completion_code, &received_slot_id, &received_event_type, &received_endpoint_id);
+
+		if (received_event_type != event_type || received_slot_id != device->slot_id || received_endpoint_id != EP0_ID)
+			continue;
+
+		if (completion_code != 1)
+			return false;
+
+		return true;
+	}
+}
+
+bool set_configuration(USB_Device* device)
+{
+	const u8 SET_CONFIG = 0x09;
+
+	u32 setup_trb[4] = {0};
+
+	setup_trb[0] = ((u32)(SET_CONFIG << 8)) | ((u32)device->config_value << 16);
+	setup_trb[2] = 8;			// Transfer length = 8
+	setup_trb[3] = (1U << 6)	// IDT = 1
+	             | (1U << 4)	// chain = 1
+				 | (2U << 10);	// TRB type = 2 (setup stage)
+
+
+
+	u32 status_trb[4] = {0};
+	status_trb[3] = (1U << 16)	// direction = IN
+		| (1U << 5)				// IOC = 1
+		| (4U << 10);			// TRB type = 4 (status stage)
+
+
+	u32* trbs[] = {setup_trb, status_trb};
+
+	return send_to_ep0_and_acknowledge(device, trbs, 2, TRANSFER_EVENT);
+}
+
+bool set_protocol(USB_Device* device, u8 interface_number)
+{
+	const u8 SET_PROTOCOL = 0x0B;
+
+	u32 setup_trb[4] = {0};
+
+	setup_trb[0] = 0x21U
+				 | ((u32)SET_PROTOCOL << 8);
+	setup_trb[1] = interface_number;	// wIndex = interface number
+	setup_trb[2] = 8;					// Transfer length = 8
+	setup_trb[3] = (1U << 6)			// IDT = 1
+				 | (1U << 4)			// Chain = 1
+				 | (2U << 10);			// TRB type = 2 (Setup Stage)
+
+	u32 status_trb[4] = {0};
+
+	status_trb[3] = (1U << 16)			// Direction = IN
+				  | (1U << 5)			// IOC = 1
+				  | (4U << 10);			// TRB type = 4 (Status Stage)
+
+	u32* trbs[] = {setup_trb, status_trb};
+
+	return send_to_ep0_and_acknowledge(device, trbs, 2, TRANSFER_EVENT);
+}
+
