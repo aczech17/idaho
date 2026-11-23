@@ -3,6 +3,7 @@
 
 #include "../common.h"
 #include "usb_interface_endpoint.h"
+#include <stdbool.h>
 
 typedef struct
 {
@@ -16,5 +17,7 @@ typedef struct
 
 	USB_Interface_Endpoint* endpoints;
 }USB_Interface;
+
+bool allocate_interface_endpoints(USB_Interface*);
 
 #endif // IO_USB_INTERFACE_H

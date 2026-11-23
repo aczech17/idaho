@@ -417,6 +417,27 @@ static bool parse_config_descriptor(USB_Device* device)
 	return true;
 }
 
+static bool allocate_interfaces(USB_Device* device)
+{
+	u64 mem_needed = device->interfaces_count * sizeof(USB_Interface);
+	u64 frames_to_allocate = (mem_needed + FRAME_SIZE - 1) / FRAME_SIZE;
+
+	Virt_addr virt_addr = arena_allocate_pages(&xhci_driver_page_allocator, frames_to_allocate);
+	Phys_addr phys_addr = allocate_contiguous_general_frames(frames_to_allocate, MAX_FRAME_NUM);
+
+	if (virt_addr == INVALID_ADDR || phys_addr == INVALID_ADDR)
+		return false;
+
+	map_address(virt_addr, phys_addr, PTE_WRITABLE);
+
+	memset((void*)virt_addr, 0, frames_to_allocate * FRAME_SIZE); // Just to be sure.
+
+	device->interfaces = (USB_Interface*)virt_addr;
+
+	return true;
+}
+
+
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id)
 {
 	device->usb_controller = usb_controller;
@@ -450,11 +471,72 @@ bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 por
 	get_descriptor(device, CONFIG_DESCRIPTOR, device->config_total_length);
 	device->config_descriptor = device->received_descriptor_virt_addr;
 
+	if (!allocate_interfaces(device))
+		return false;
+
 	// USB_Controller → USB_Device → USB_Interface → USB_Interface_Endpoint
 	// Parse all this shit.
-	for (u8 intf_num = 0; intf_num < device->interfaces_count; ++intf_num)
-	{
 
+
+	volatile u8* descriptor = (volatile u8*)(device->config_descriptor + 9);
+	for (u8 intf_num = 0; intf_num < device->interfaces_count; )
+	{
+		// Parse 9 bytes.
+		USB_Interface* interface = &device->interfaces[intf_num];
+
+		u8 descriptor_size = descriptor[0];
+		u8 descriptor_type = descriptor[1];
+
+
+		if (descriptor_size != 9 || descriptor_type != INTERFACE_DESCRIPTOR)
+		{
+			descriptor += descriptor_size;
+			continue;
+		}
+
+		u8 alternate_setting = descriptor[3];
+		if (alternate_setting != 0)
+		{
+			descriptor += descriptor_size;
+			continue;
+		}
+
+		interface->number = descriptor[2];
+		interface->alternate_setting = alternate_setting;
+		interface->endpoint_count = descriptor[4];
+		interface->class = descriptor[5];
+		interface->subclass = descriptor[6];
+		interface->protocol = descriptor[7];
+		interface->name_index = descriptor[8];
+
+		descriptor += 9;
+
+		if (!allocate_interface_endpoints(interface))
+			panic("Could not allocate USB interface.");
+
+		for (u8 ep_num = 0; ep_num < interface->endpoint_count; )
+		{
+			USB_Interface_Endpoint* endpoint = &interface->endpoints[ep_num];
+
+			descriptor_size = descriptor[0];
+			descriptor_type = descriptor[1];
+
+			if (descriptor_size != 7 || descriptor_type != ENDPOINT_DESCRIPTOR)
+			{
+				descriptor += descriptor_size;
+				continue;
+			}
+
+			endpoint->endpoint_address = descriptor[2];
+			endpoint->attributes = descriptor[3];
+			endpoint->max_packet_size = (u16)descriptor[4] | ((u16)descriptor[5] << 8);
+			endpoint->interval = descriptor[6];
+
+			descriptor += descriptor_size;
+			++ep_num;
+		}
+
+		++intf_num;
 	}
 
 
