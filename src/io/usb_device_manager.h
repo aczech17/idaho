@@ -7,8 +7,11 @@
 typedef struct
 {
 	USB_Controller* controller;
-	USB_Device* devices;
-	u8 device_count;
+	// USB_Device* devices;
+	// u8 device_count;
+
+	USB_Device keyboard_device;
+	USB_Interface* keyboard_interface;
 }USB_Device_Manager;
 
 bool setup_usb_device_manager(USB_Device_Manager*, USB_Controller*);

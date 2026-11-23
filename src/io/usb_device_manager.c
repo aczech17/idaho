@@ -38,82 +38,100 @@
 // 	++manager->device_count;
 // }
 
-static bool find_boot_keyboard_interface(const USB_Device* device, u8* interface_number)
+// static bool find_boot_keyboard_interface(const USB_Device* device, u8* interface_number)
+// {
+// 	const u8* descriptor = (const u8*)device->config_descriptor;
+// 	u32 offset = 0;
+// 	u32 total_length = device->config_total_length;
+//
+// 	while (offset < total_length)
+// 	{
+// 		if (total_length - offset < 2)
+// 			return false;
+//
+// 		u8 length = descriptor[offset];
+// 		u8 type = descriptor[offset + 1];
+//
+// 		if (length < 2 || length > total_length - offset)
+// 			return false;
+//
+// 		if (type == 4)
+// 		{
+// 			if (length < 9)
+// 				return false;
+//
+// 			u8 interface_class = descriptor[offset + 5];
+// 			u8 interface_subclass = descriptor[offset + 6];
+// 			u8 interface_protocol = descriptor[offset + 7];
+//
+// 			if (interface_class == 0x03
+// 				&& interface_subclass == 0x01
+// 				&& interface_protocol == 0x01)
+// 			{
+// 				*interface_number = descriptor[offset + 2];
+// 				return true;
+// 			}
+// 		}
+//
+// 		offset += length;
+// 	}
+//
+// 	return false;
+// }
+
+static USB_Interface* find_keyboard_interface(USB_Device* device)
 {
-	const u8* descriptor = (const u8*)device->config_descriptor;
-	u32 offset = 0;
-	u32 total_length = device->config_total_length;
+	// USB_Interface* interface = NULL;
 
-	while (offset < total_length)
+	const u8 HID_CLASS = 0x03;
+	const u8 BOOT_INTERFACE_SUBCLASS = 0x01;
+	const u8 KEYBOARD_PROTOCOL = 0x01;
+
+
+	for (u32 intf_num = 0; intf_num < device->interfaces_count; ++intf_num)
 	{
-		if (total_length - offset < 2)
-			return false;
+		USB_Interface* interface = &device->interfaces[intf_num];
 
-		u8 length = descriptor[offset];
-		u8 type = descriptor[offset + 1];
-
-		if (length < 2 || length > total_length - offset)
-			return false;
-
-		if (type == 4)
-		{
-			if (length < 9)
-				return false;
-
-			u8 interface_class = descriptor[offset + 5];
-			u8 interface_subclass = descriptor[offset + 6];
-			u8 interface_protocol = descriptor[offset + 7];
-
-			if (interface_class == 0x03
-				&& interface_subclass == 0x01
-				&& interface_protocol == 0x01)
-			{
-				*interface_number = descriptor[offset + 2];
-				return true;
-			}
-		}
-
-		offset += length;
+		if (interface->class == HID_CLASS && interface->subclass == BOOT_INTERFACE_SUBCLASS && interface->protocol == KEYBOARD_PROTOCOL)
+			return interface;
 	}
 
-	return false;
+	return NULL;
 }
 
 bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* controller)
 {
+	memset(manager, 0, sizeof(USB_Device_Manager));
+
 	manager->controller = controller;
-	manager->device_count = 0;
+	// manager->device_count = 0;
 
 	// if (!setup_devices_buffer(manager))
 	// 	return false;
 
-	bool keyboard_found = false;
+
 	for (u8 port = 0; port < controller->max_ports; ++port)
 	{
 		if (controller->usb_port_states[port] != USB_PORT_CONNECTED)
 			continue;
 
-		USB_Device new_device = {0};
-		if (!setup_usb_device(&new_device, manager->controller, port + 1))
+		USB_Device device = {0};
+		if (!setup_usb_device(&device, manager->controller, port + 1))
 		{
 			vga_printf("Warning: USB device %X could not be set up.\n", port);
 			continue;
 		}
 
-		// add_device(manager, &new_device);
+		USB_Interface* keyboard_interface = find_keyboard_interface(&device);
+		if (!keyboard_interface)
+			continue;
 
-		u8 keyboard_interface_number;
-		if (find_boot_keyboard_interface(&new_device, &keyboard_interface_number))
-		{
-			keyboard_found = true;
-			break;
-		}
+
+		manager->keyboard_device = device;
+		manager->keyboard_interface = keyboard_interface;
+
+		return true;
 	}
 
-	if (!keyboard_found)
-		return false;
-
-
-
-	return true;
+	return false;
 }
