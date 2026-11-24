@@ -573,6 +573,216 @@ static bool send_to_ep0_and_acknowledge(USB_Device* device, u32** trbs, u8 trbs_
 	}
 }
 
+// bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt)
+// {
+// 	u8 ep_number = ep->endpoint_address & 0x0F;
+// 	u8 direction = (ep->endpoint_address & 0x80) != 0;
+// 	u8 dci = 2 * ep_number + direction;
+//
+//
+// 	ctxt->input_control_context[0] = 0; // drop context flags
+// 	ctxt->input_control_context[1] = 1 | (1 << dci); // add context flags
+//
+// 	// copy slot context
+// 	u8* device_slot_ctxt_address = (u8*)device->device_context_virt_addr;
+// 	u8* dest = (u8*)ctxt->slot_context;
+// 	memcpy(dest, device_slot_ctxt_address, 32);
+//
+// 	u8 current_context_entries = (ctxt->slot_context[0] >> 27) & 0x1F;
+// 	if (dci > current_context_entries)
+// 	{
+// 		ctxt->slot_context[0] &= ~(0x1F << 27);
+// 		ctxt->slot_context[0] |= (u32)dci << 27;
+// 	}
+//
+//
+// 	u32* endpoint_context = ctxt->endpoint_contexts[dci - 1];
+//
+// 	endpoint_context[0] =
+// 		(3 << 1) |                         // CErr = 3
+// 		(7 << 3) |                         // Endpoint Type = Interrupt IN
+// 		((u32)ep->interval << 16);          // Interval
+//
+// 	endpoint_context[1] =
+// 		((u32)ep->max_packet_size << 16);  // Max Packet Size
+//
+// 	u64 dequeue_pointer = ep->transfer_ring_phys_addr
+// 		| (ep->transfer_ring_cycle_state ? 1ULL : 0ULL);
+//
+// 	endpoint_context[2] = (u32)dequeue_pointer;
+// 	endpoint_context[3] = (u32)(dequeue_pointer >> 32);
+//
+// 	endpoint_context[4] = 0; // Average TRB Length and Max ESIT Payload
+// 	endpoint_context[5] = 0;
+// 	endpoint_context[6] = 0;
+// 	endpoint_context[7] = 0;
+//
+//
+//
+// }
+
+bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt)
+{
+    u8 endpoint_number = ep->endpoint_address & 0x0F;
+    u8 dci = 2 * endpoint_number + 1;
+
+    // Decode wMaxPacketSize.
+    u16 w_max_packet_size = ep->max_packet_size;
+    u16 max_packet_size = w_max_packet_size & 0x07FF;
+    u8 max_burst_size = 0;
+
+
+    // Calculate the endpoint interval and maximum ESIT payload.
+    u8 interval;
+    u32 max_esit_payload;
+
+    switch (device->port_speed)
+    {
+        case 1: // Full-Speed
+        case 2: // Low-Speed
+        {
+            u32 interval_microframes = (u32)ep->interval * 8;
+            interval = 0;
+
+            while (interval_microframes > 1)
+            {
+                interval_microframes >>= 1;
+                interval++;
+            }
+
+            if (interval < 3)
+            {
+                interval = 3;
+            }
+            else if (interval > 10)
+            {
+                interval = 10;
+            }
+
+            max_esit_payload = max_packet_size;
+            break;
+        }
+
+        case 3: // High-Speed
+        {
+            max_burst_size = (w_max_packet_size >> 11) & 0x03;
+
+            if (max_burst_size > 2)
+            {
+                return false;
+            }
+
+            interval = ep->interval - 1;
+
+            max_esit_payload =
+                (u32)max_packet_size * (max_burst_size + 1);
+
+            break;
+        }
+
+        default:
+        {
+            // SuperSpeed requires Endpoint Companion Descriptor data.
+            return false;
+        }
+    }
+
+    // Copy the current Slot Context from the Device Context.
+    memcpy(ctxt->slot_context,(void*)device->device_context_virt_addr,32);
+
+    // Update Context Entries in Slot Context DWORD 0.
+    u8 current_context_entries = (ctxt->slot_context[0] >> 27) & 0x1F;
+
+    if (dci > current_context_entries)
+    {
+        ctxt->slot_context[0] &= ~(0x1Fu << 27);
+        ctxt->slot_context[0] |= (u32)dci << 27;
+    }
+
+    // Input Control Context.
+    memset(ctxt->input_control_context, 0, 32);
+
+    ctxt->input_control_context[0] = 0; // Drop Context Flags
+    ctxt->input_control_context[1] =
+        (1u << 0) | (1u << dci); // Add Slot Context and endpoint
+
+
+
+    u32* endpoint_context = ctxt->endpoint_contexts[dci - 1];
+
+    memset(endpoint_context, 0, 32);
+
+    // DWORD 0:
+    // Interval: bits 23:16
+    // Max ESIT Payload Hi: bits 31:24
+    endpoint_context[0] =
+        ((u32)interval << 16) |
+        (((max_esit_payload >> 16) & 0xFF) << 24);
+
+    // DWORD 1:
+    // CErr: bits 2:1
+    // Endpoint Type: bits 5:3 (7 = Interrupt IN)
+    // Max Burst Size: bits 15:8
+    // Max Packet Size: bits 31:16
+    endpoint_context[1] =
+        (3u << 1) |
+        (7u << 3) |
+        ((u32)max_burst_size << 8) |
+        ((u32)max_packet_size << 16);
+
+    // DWORD 2 and DWORD 3:
+    // Transfer Ring Dequeue Pointer and DCS.
+    u64 dequeue_pointer =
+        (u64)ep->transfer_ring_phys_addr |
+        (ep->transfer_ring_cycle_state ? 1ULL : 0ULL);
+
+    endpoint_context[2] = (u32)dequeue_pointer;
+    endpoint_context[3] = (u32)(dequeue_pointer >> 32);
+
+    // DWORD 4:
+    // Average TRB Length: bits 15:0
+    // Max ESIT Payload Low: bits 31:16
+    endpoint_context[4] =
+        (max_esit_payload & 0xFFFF) |
+        ((max_esit_payload & 0xFFFF) << 16);
+
+    // DWORD 5-7 remain zero.
+
+
+	u32 trb[4];
+	trb[0] = (u32)device->input_context_phys_addr;
+	trb[1] = (u32)((u64)device->input_context_phys_addr >> 32);
+	trb[2] = 0;
+
+	trb[3] =
+		(12u << 10) |          // TRB Type: Configure Endpoint Command
+		((u32)device->slot_id << 24);  // Slot ID
+
+	write_command_trb(device->usb_controller, trb);
+	doorbell_command_ring(device->usb_controller);
+
+
+	u32 event_trb[4];
+	u8 completion_code, received_slot_id, received_event_type;
+	while (1)
+	{
+		while (!read_event_trb(device->usb_controller, event_trb)) {}
+		update_event_ring_dequeue_pointer(device->usb_controller);
+
+
+		decode_event_trb(event_trb, &completion_code, &received_slot_id, &received_event_type, NULL);
+		if (received_event_type != COMMAND_COMPLETION_EVENT || received_slot_id != device->slot_id)
+			continue;
+
+		if (completion_code != 1)
+			return false;
+
+		break;
+	}
+
+	return true;
+}
+
 bool set_configuration(USB_Device* device)
 {
 	const u8 SET_CONFIG = 0x09;

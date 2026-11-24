@@ -51,7 +51,15 @@ typedef struct
 	Virt_addr config_descriptor;
 }USB_Device;
 
+typedef struct
+{
+	u32 input_control_context[8];
+	u32 slot_context[8];
+	u32 endpoint_contexts[31][8];
+}Input_context;
+
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);
+bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt);
 bool set_configuration(USB_Device* device);
 bool set_protocol(USB_Device* device, u8 interface_number);
 

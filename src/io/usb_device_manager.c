@@ -164,8 +164,9 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 	if (!set_up_usb_interface_ep_buffs(ep))
 		return false;
 
-
-
+	Input_context* keyboard_device_context = (Input_context*)(manager->keyboard_device.input_context_virt_addr);
+	if (!set_input_context(&manager->keyboard_device, ep, keyboard_device_context))
+		return false;
 
 	if (!set_configuration(&manager->keyboard_device))
 		return false;
