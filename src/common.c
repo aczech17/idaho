@@ -10,6 +10,17 @@ size_t strlen(const char* str)
     return len;
 }
 
+int strcmp(const char* str1, const char* str2)
+{
+    while (*str1 && *str1 == *str2)
+    {
+        ++str1;
+        ++str2;
+    }
+
+    return (unsigned char)*str1 - (unsigned char)*str2;
+}
+
 void* memcpy(void* dst, const void* src, size_t count)
 {
     u8* d = (u8*)dst;

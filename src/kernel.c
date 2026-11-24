@@ -2,30 +2,14 @@
 #include "memory/frame_allocator.h"
 #include "memory/page_table.h"
 #include "interrupt/idt.h"
-#include "io/usb_device.h"
 #include "vga/vga.h"
 #include "io/usb_controller.h"
 #include "io/usb_device_manager.h"
+#include "command_line.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
 Frame_allocator global_frame_allocator;
-
-// static void print_memory_map(const Phys_memory_map* memory_regions, const char* name)
-// {
-//     vga_printf("%Z%s:%z\n", 0x09 ,name);
-//     u64 total_memory_available = 0;
-//     for (u32 i = 0; i < memory_regions->region_count; ++i)
-//     {
-//         total_memory_available += (memory_regions->end_addr[i] - memory_regions->start_addr[i] + 1);
-//         vga_printf("start = %X, end = %X\n", memory_regions->start_addr[i], memory_regions->end_addr[i]);
-//     }
-//     // u64 total_frames_available = total_memory_available / FRAME_SIZE;
-//
-//     vga_printf("%s: %X bytes\n", name, total_memory_available);
-//     // vga_printf("Total frames in %s: %X\n%z\n", name, total_frames_available);
-// }
-
 
 static void measure_memory_regions(const Phys_memory_map* memory_regions, const char* name)
 {
@@ -78,11 +62,24 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	else
 		vga_printf("%ZKeyboard configuration failed.\n%z", 0x04);
 
+	Command_line cmd = {0};
+	cmd.prompt = "%";
+
+	vga_printf("\n%s: ", cmd.prompt);
 	for (;;)
 	{
 		char c = get_keyboard_key(&dvm);
-		if (c != 0)
+		if (c == 0)
+			continue;
+
+		if (c == '\n')
+			execute_command_line_command(&cmd);
+		else
+		{
+			add_letter_to_command_line(&cmd, c);
 			vga_printf("%c", c);
+		}
+
 	}
 
     for (;;);

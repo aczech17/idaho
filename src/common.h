@@ -14,6 +14,7 @@ typedef uint64_t u64;
 typedef int64_t i64;
 
 size_t strlen(const char* str);
+int strcmp(const char* str1, const char* str2);
 void* memcpy(void* dst, const void* src, size_t count);
 void* memset(void* dest, int value, size_t count);
 void vga_printf(const char* format, ...);
