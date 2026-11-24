@@ -181,8 +181,14 @@ Key_report keyboard_step(USB_Device_Manager* manager)
 	Keyboard_response_status response_status = process_keyboard_respond(manager, response);
 	if (response_status == KEYBOARD_REQUEST_ERROR)
 		panic("keyboard request error");
-	if (response_status == KEYBOARD_WAITING || response_status == KEYBOARD_NO_KEYS_PRESSED)
+	if (response_status == KEYBOARD_WAITING)
 		return report;
+
+	if (response_status == KEYBOARD_NO_KEYS_PRESSED)
+	{
+		report.present = true;
+		return report;
+	}
 
 	report.present = true;
 	report.modifiers = response[0];
