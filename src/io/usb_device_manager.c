@@ -91,11 +91,15 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 	if (!set_protocol(&manager->keyboard_device, keyboard_interface->number))
 		return false;
 
+	manager->keyboard_transfer_pending = false;
 	return true;
 }
 
-static Keyboard_respond request_from_keyboard(USB_Device_Manager* manager, u8* respond)
+static bool request_from_keyboard(USB_Device_Manager* manager)
 {
+	if (manager->keyboard_transfer_pending == true)
+		return true;
+
 	USB_Device* device = &manager->keyboard_device;
 	USB_Interface_Endpoint* ep = manager->keyboard_interrupt_in_endpoint;
 	u64 buffer_addr = (u64)ep->data_buffer_phys_addr;
@@ -110,41 +114,48 @@ static Keyboard_respond request_from_keyboard(USB_Device_Manager* manager, u8* r
 		| (1U << 5); // IOC
 
 	if (!write_to_endpoint_transfer_ring(ep, normal_trb))
-		return KEYBOARD_REQUEST_ERROR;
+		return false;
 
+	manager->keyboard_transfer_pending = true;
 	doorbell_ring(manager->controller, device->slot_id, dci);
+	return true;
+}
 
+static Keyboard_response_status process_keyboard_respond(USB_Device_Manager* manager, u8* response)
+{
+	USB_Device* device = &manager->keyboard_device;
+	USB_Interface_Endpoint* ep = manager->keyboard_interrupt_in_endpoint;
+	u8 dci = 2 * (ep->endpoint_address & 0x0F) + 1;
 
 	u32 event_trb[4];
-	while (1)
-	{
-		while (!read_event_trb(device->usb_controller, event_trb)) {}
-		update_event_ring_dequeue_pointer(device->usb_controller);
+	if (!read_event_trb(device->usb_controller, event_trb))
+		return KEYBOARD_WAITING;
 
-		u8 event_type = (event_trb[3] >> 10) & 0x3F;
-		u8 endpoint_id = (event_trb[3] >> 16) & 0x1F;
-		u8 slot_id = (event_trb[3] >> 24) & 0xFF;
+	update_event_ring_dequeue_pointer(device->usb_controller);
 
-		if (event_type != TRANSFER_EVENT || slot_id != device->slot_id || endpoint_id != dci)
-			continue;
+	u8 event_type = (event_trb[3] >> 10) & 0x3F;
+	u8 endpoint_id = (event_trb[3] >> 16) & 0x1F;
+	u8 slot_id = (event_trb[3] >> 24) & 0xFF;
 
-		u8 completion_code = (event_trb[2] >> 24) & 0xFF;
-		u32 residual_length = event_trb[2] & 0xFFFFFF;
+	if (event_type != TRANSFER_EVENT || slot_id != device->slot_id || endpoint_id != dci)
+		return KEYBOARD_WAITING;
 
-		if (completion_code != 1 || residual_length != 0)
-			return KEYBOARD_REQUEST_ERROR;
+	manager->keyboard_transfer_pending = false;
 
-		break;
-	}
+	u8 completion_code = (event_trb[2] >> 24) & 0xFF;
+	u32 residual_length = event_trb[2] & 0xFFFFFF;
 
-	memcpy(respond, (void*)(ep->data_buffer_virt_addr), 8);
+	if (completion_code != 1 || residual_length != 0)
+		return KEYBOARD_REQUEST_ERROR;
 
-	if (respond[0] != 0)
+	memcpy(response, (void*)(ep->data_buffer_virt_addr), 8);
+
+	if (response[0] != 0)
 		return KEYBOARD_KEYS_PRESSED;
 
 	for (u8 i = 2; i < 8; i++)
 	{
-		if (respond[i] != 0)
+		if (response[i] != 0)
 			return KEYBOARD_KEYS_PRESSED;
 	}
 
@@ -153,9 +164,29 @@ static Keyboard_respond request_from_keyboard(USB_Device_Manager* manager, u8* r
 
 void keyboard_loop(USB_Device_Manager* manager)
 {
+	u8 response[8] = {0};
+
 	for (;;)
 	{
-		Keyboard_respond resp = request_from_keyboard(manager, NULL);
-		vga_printf("%X\n", resp);
+		if (!request_from_keyboard(manager))
+			panic("Could not send request to the keyboard.");
+
+		Keyboard_response_status resp = process_keyboard_respond(manager, response);
+		switch (resp)
+		{
+			case KEYBOARD_WAITING:
+			case KEYBOARD_NO_KEYS_PRESSED:
+				break;
+
+			case KEYBOARD_KEYS_PRESSED:
+				for (int i = 0; i < 8; ++i)
+					vga_printf("%X ", response[i]);
+				vga_printf("\n");
+
+				break;
+
+			case KEYBOARD_REQUEST_ERROR:
+				panic("keyboard request error");
+		}
 	}
 }

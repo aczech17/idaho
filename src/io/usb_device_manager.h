@@ -10,6 +10,8 @@ typedef struct
 	USB_Device keyboard_device;
 	i16 keyboard_interface_index;
 	USB_Interface_Endpoint* keyboard_interrupt_in_endpoint;
+
+	bool keyboard_transfer_pending;
 }USB_Device_Manager;
 
 typedef enum
@@ -17,7 +19,8 @@ typedef enum
 	KEYBOARD_KEYS_PRESSED,
 	KEYBOARD_NO_KEYS_PRESSED,
 	KEYBOARD_REQUEST_ERROR,
-}Keyboard_respond;
+	KEYBOARD_WAITING,
+}Keyboard_response_status;
 
 bool setup_usb_device_manager(USB_Device_Manager*, USB_Controller*);
 void keyboard_loop(USB_Device_Manager*);
