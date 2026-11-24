@@ -11,21 +11,32 @@ Page_table* global_page_table;
 static Idt_entry idt[256];
 Frame_allocator global_frame_allocator;
 
-static void print_memory_map(const Phys_memory_map* memory_regions, const char* name)
+// static void print_memory_map(const Phys_memory_map* memory_regions, const char* name)
+// {
+//     vga_printf("%Z%s:%z\n", 0x09 ,name);
+//     u64 total_memory_available = 0;
+//     for (u32 i = 0; i < memory_regions->region_count; ++i)
+//     {
+//         total_memory_available += (memory_regions->end_addr[i] - memory_regions->start_addr[i] + 1);
+//         vga_printf("start = %X, end = %X\n", memory_regions->start_addr[i], memory_regions->end_addr[i]);
+//     }
+//     // u64 total_frames_available = total_memory_available / FRAME_SIZE;
+//
+//     vga_printf("%s: %X bytes\n", name, total_memory_available);
+//     // vga_printf("Total frames in %s: %X\n%z\n", name, total_frames_available);
+// }
+
+
+static void measure_memory_regions(const Phys_memory_map* memory_regions, const char* name)
 {
-    vga_printf("%Z%s:%z\n", 0x09 ,name);
-    u64 total_memory_available = 0;
-    for (u32 i = 0; i < memory_regions->region_count; ++i)
-    {
-        total_memory_available += (memory_regions->end_addr[i] - memory_regions->start_addr[i] + 1);
-        vga_printf("start = %X, end = %X\n", memory_regions->start_addr[i], memory_regions->end_addr[i]);
-    }
-    // u64 total_frames_available = total_memory_available / FRAME_SIZE;
+	u64 total_memory_available = 0;
+	for (u32 i = 0; i < memory_regions->region_count; ++i)
+	{
+		total_memory_available += (memory_regions->end_addr[i] - memory_regions->start_addr[i] + 1);
+	}
 
-    vga_printf("%s: %X bytes\n", name, total_memory_available);
-    // vga_printf("Total frames in %s: %X\n%z\n", name, total_frames_available);
+	vga_printf("%s size: %X bytes\n", name, total_memory_available);
 }
-
 
 
 
@@ -45,8 +56,8 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     Phys_memory_map kernel_regions;
     register_kernel_regions(&kernel_regions, kernel_mem_info);
 
-    print_memory_map(&phys_memory_regions, "available memory");
-    print_memory_map(&kernel_regions, "kernel memory");
+    measure_memory_regions(&phys_memory_regions, "available memory");
+    measure_memory_regions(&kernel_regions, "kernel memory");
 
 
     setup_frame_allocator(&phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
@@ -65,9 +76,9 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 
 	USB_Device_Manager dvm;
 	if (setup_usb_device_manager(&dvm, &usb_controller))
-		vga_printf("%ZKeyboard found.\n%z", 0x0A);
+		vga_printf("%ZKeyboard configuration done.\n%z", 0x0A);
 	else
-		vga_printf("%ZKeyboard not found\n%z", 0x04);
+		vga_printf("%ZKeyboard configuration failed.\n%z", 0x04);
 
 	// USB_Device keyboard_driver;
 	// setup_usb_device(&keyboard_driver, &xhci_info);

@@ -157,9 +157,6 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 		return false;
 
 	USB_Interface_Endpoint* ep = &keyboard_interface->endpoints[interrupt_in_ep_num];
-	u8 endpoint_address = ep->endpoint_address;
-	u8 endpoint_number = endpoint_address & 0x0F;
-	u8 controller_ep_id = 2 * endpoint_number + 1;
 
 	if (!set_up_usb_interface_ep_buffs(ep))
 		return false;
@@ -173,15 +170,6 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 
 	if (!set_protocol(&manager->keyboard_device, keyboard_interface->number))
 		return false;
-
-
-
-
-
-
-
-
-	vga_printf("EP id: %x\n", controller_ep_id);
 
 	return true;
 }
