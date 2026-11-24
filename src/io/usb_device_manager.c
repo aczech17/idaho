@@ -170,7 +170,7 @@ static Keyboard_response_status process_keyboard_respond(USB_Device_Manager* man
 	return KEYBOARD_NO_KEYS_PRESSED;
 }
 
-Key_report keyboard_step(USB_Device_Manager* manager)
+static Key_report keyboard_step(USB_Device_Manager* manager)
 {
 	Key_report report = {0};
 	u8 response[8] = {0};
@@ -197,4 +197,62 @@ Key_report keyboard_step(USB_Device_Manager* manager)
 		report.keycodes[i] = response[i + 2];
 
 	return report;
+}
+
+static bool present_in_report(const Key_report* key_report, u8 hid_code)
+{
+	for (u8 i = 0; i < 6; ++i)
+		if (key_report->keycodes[i] == hid_code)
+			return true;
+
+	return false;
+}
+
+char get_keyboard_key(USB_Device_Manager* device_manager)
+{
+	static Key_report prev_report = {0};
+	static Key_report new_report = {0};
+
+	new_report = keyboard_step(device_manager);
+	if (!new_report.present)
+		return 0;
+
+	if (!prev_report.present)
+	{
+		prev_report = new_report;
+		return 0;
+	}
+
+	u8 hid_code_detected = 0;
+	for (u8 kc = 0; kc < 6; ++kc)
+	{
+		u8 hid_code = prev_report.keycodes[kc];
+		if (hid_code == 0)
+			continue;
+
+		if (!present_in_report(&new_report, hid_code))
+		{
+			hid_code_detected = hid_code;
+			break;
+		}
+	}
+
+	prev_report = new_report;
+
+	// Handle special codes.
+	switch (hid_code_detected)
+	{
+		case 0:
+			return 0;
+		case 0x2C:
+			return ' ';
+		case 0x28:
+			return '\n';
+
+		default:
+			break;
+	}
+
+	char ascii_code = (char)'A' + (char)(hid_code_detected) - (char)(0x04);
+	return ascii_code;
 }

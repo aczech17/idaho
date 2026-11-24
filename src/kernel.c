@@ -38,15 +38,6 @@ static void measure_memory_regions(const Phys_memory_map* memory_regions, const 
 	vga_printf("%s size: %X bytes\n", name, total_memory_available);
 }
 
-static bool present_in_report(const Key_report* key_report, u8 hid_code)
-{
-	for (u8 i = 0; i < 6; ++i)
-		if (key_report->keycodes[i] == hid_code)
-			return true;
-
-	return false;
-}
-
 void kernel_main(const Kernel_mem_info* kernel_mem_info)
 {
     const Phys_addr LOW_MEM_SIZE = 1 << 20;
@@ -87,34 +78,11 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	else
 		vga_printf("%ZKeyboard configuration failed.\n%z", 0x04);
 
-
-	Key_report prev_report = {0};
 	for (;;)
 	{
-		Key_report new_report = keyboard_step(&dvm);
-		if (!new_report.present)
-			continue;
-
-		if (!prev_report.present)
-		{
-			prev_report = new_report;
-			continue;
-		}
-
-		for (u8 kc = 0; kc < 6; ++kc)
-		{
-			u8 hid_code = prev_report.keycodes[kc];
-			if (hid_code == 0)
-				continue;
-
-			if (!present_in_report(&new_report, hid_code))
-			{
-				char ascii_code = 'A' + (char)hid_code - 0x04;
-				vga_printf("%c", ascii_code);
-			}
-		}
-
-		prev_report = new_report;
+		char c = get_keyboard_key(&dvm);
+		if (c != 0)
+			vga_printf("%c", c);
 	}
 
     for (;;);
