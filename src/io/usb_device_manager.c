@@ -3,6 +3,14 @@
 #include "../common.h"
 #include "usb_device.h"
 
+typedef enum
+{
+	KEYBOARD_KEYS_PRESSED,
+	KEYBOARD_NO_KEYS_PRESSED,
+	KEYBOARD_REQUEST_ERROR,
+	KEYBOARD_WAITING,
+}Keyboard_response_status;
+
 static i16 find_keyboard_interface_number(USB_Device* device)
 {
 	// USB_Interface* interface = NULL;
@@ -162,31 +170,25 @@ static Keyboard_response_status process_keyboard_respond(USB_Device_Manager* man
 	return KEYBOARD_NO_KEYS_PRESSED;
 }
 
-void keyboard_loop(USB_Device_Manager* manager)
+Key_report keyboard_step(USB_Device_Manager* manager)
 {
+	Key_report report = {0};
 	u8 response[8] = {0};
 
-	for (;;)
-	{
-		if (!request_from_keyboard(manager))
-			panic("Could not send request to the keyboard.");
+	if (!request_from_keyboard(manager))
+		panic("Could not send request to the keyboard.");
 
-		Keyboard_response_status resp = process_keyboard_respond(manager, response);
-		switch (resp)
-		{
-			case KEYBOARD_WAITING:
-			case KEYBOARD_NO_KEYS_PRESSED:
-				break;
+	Keyboard_response_status response_status = process_keyboard_respond(manager, response);
+	if (response_status == KEYBOARD_REQUEST_ERROR)
+		panic("keyboard request error");
+	if (response_status == KEYBOARD_WAITING || response_status == KEYBOARD_NO_KEYS_PRESSED)
+		return report;
 
-			case KEYBOARD_KEYS_PRESSED:
-				for (int i = 0; i < 8; ++i)
-					vga_printf("%X ", response[i]);
-				vga_printf("\n");
+	report.present = true;
+	report.modifiers = response[0];
 
-				break;
+	for (u8 i = 0; i < 6; ++i)
+		report.keycodes[i] = response[i + 2];
 
-			case KEYBOARD_REQUEST_ERROR:
-				panic("keyboard request error");
-		}
-	}
+	return report;
 }

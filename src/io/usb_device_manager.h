@@ -14,15 +14,15 @@ typedef struct
 	bool keyboard_transfer_pending;
 }USB_Device_Manager;
 
-typedef enum
+typedef struct
 {
-	KEYBOARD_KEYS_PRESSED,
-	KEYBOARD_NO_KEYS_PRESSED,
-	KEYBOARD_REQUEST_ERROR,
-	KEYBOARD_WAITING,
-}Keyboard_response_status;
+	bool present;
+	u8 modifiers;
+	u8 keycodes[6];
+}Key_report;
+
 
 bool setup_usb_device_manager(USB_Device_Manager*, USB_Controller*);
-void keyboard_loop(USB_Device_Manager*);
+Key_report keyboard_step(USB_Device_Manager* manager);
 
 #endif // IO_USB_DEVICE_MANAGER_H

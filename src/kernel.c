@@ -80,13 +80,23 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	else
 		vga_printf("%ZKeyboard configuration failed.\n%z", 0x04);
 
-	keyboard_loop(&dvm);
 
-	// USB_Device keyboard_driver;
-	// setup_usb_device(&keyboard_driver, &xhci_info);
-	//
-	// vga_printf("USB setup completed.\n");
-	// vga_printf("port: %X, slot: %X\n", keyboard_driver.port_id, keyboard_driver.slot_id);
+	for (;;)
+	{
+		Key_report key_report = keyboard_step(&dvm);
+		if (!key_report.present)
+			continue;
+
+		for (u8 kc = 0; kc < 6; ++kc)
+		{
+			char hid_code = key_report.keycodes[kc];
+			if (hid_code == 0)
+				continue;
+
+			char ascii_code = 'A' + hid_code - 0x04;
+			vga_printf("%c", ascii_code);
+		}
+	}
 
     for (;;);
 }
