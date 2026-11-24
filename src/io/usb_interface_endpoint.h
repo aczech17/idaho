@@ -22,5 +22,6 @@ typedef struct
 }USB_Interface_Endpoint;
 
 bool set_up_usb_interface_ep_buffs(USB_Interface_Endpoint*);
+bool write_to_transfer_ring(USB_Interface_Endpoint*, const u32 trb[4]);
 
 #endif // IO_USB_INTERFACE_ENDPOINT_H

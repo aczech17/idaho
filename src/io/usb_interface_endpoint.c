@@ -43,3 +43,39 @@ bool set_up_usb_interface_ep_buffs(USB_Interface_Endpoint* ep)
 
     return true;
 }
+
+bool write_to_transfer_ring(USB_Interface_Endpoint* ep, const u32 trb[4])
+{
+    if (ep == NULL || trb == NULL)
+        return false;
+
+    if (ep->transfer_ring_virt_addr == INVALID_ADDR || ep->transfer_ring_index >= 255)
+        return false;
+
+    volatile u32* transfer_ring = (volatile u32*)(ep->transfer_ring_virt_addr);
+    u16 index = ep->transfer_ring_index;
+    volatile u32* destination = transfer_ring + index * 4;
+
+    destination[0] = trb[0];
+    destination[1] = trb[1];
+    destination[2] = trb[2];
+
+    u32 control = ep->transfer_ring_cycle_state ? (trb[3] | 1U) : (trb[3] & ~1U);
+    destination[3] = control;
+
+    if (index == 254)
+    {
+        volatile u32* link_trb = transfer_ring + 255 * 4;
+
+        u32 link_control = ep->transfer_ring_cycle_state ? (link_trb[3] | 1U) : (link_trb[3] & ~1U);
+        link_trb[3] = link_control;
+
+        ep->transfer_ring_cycle_state = !ep->transfer_ring_cycle_state;
+        ep->transfer_ring_index = 0;
+
+        return true;
+    }
+
+    ++ep->transfer_ring_index;
+    return true;
+}
