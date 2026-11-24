@@ -22,6 +22,47 @@ static void measure_memory_regions(const Phys_memory_map* memory_regions, const 
 	vga_printf("%s size: %X bytes\n", name, total_memory_available);
 }
 
+static void format_build_date(char output[11])
+{
+	const char* date = __DATE__;
+	u8 month = 0;
+
+	switch (date[0])
+	{
+		case 'J':
+			if (date[1] == 'a')
+				month = 1;
+			else if (date[2] == 'n')
+				month = 6;
+			else
+				month = 7;
+			break;
+
+		case 'F': month = 2; break;
+		case 'M': month = date[2] == 'r' ? 3 : 5; break;
+		case 'A': month = date[1] == 'p' ? 4 : 8; break;
+		case 'S': month = 9; break;
+		case 'O': month = 10; break;
+		case 'N': month = 11; break;
+		case 'D': month = 12; break;
+
+		default: break;
+	}
+
+	output[0] = date[4] == ' ' ? '0' : date[4];
+	output[1] = date[5];
+	output[2] = '.';
+
+	output[3] = '0' + month / 10;
+	output[4] = '0' + month % 10;
+	output[5] = '.';
+
+	for (u8 i = 0; i < 4; ++i)
+		output[6 + i] = date[7 + i];
+
+	output[10] = '\0';
+}
+
 void kernel_main(const Kernel_mem_info* kernel_mem_info)
 {
     const Phys_addr LOW_MEM_SIZE = 1 << 20;
@@ -29,8 +70,12 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 
     disable_bios_cursor();
     clear_screen();
-    vga_printf("%ZIdaho OS. Witamy!\n%z\n", 0x1F);
+    vga_printf("%ZIdaho OS. Witamy!\n%z", 0x1F);
 
+	char build_date[11] = {0};
+	format_build_date(build_date);
+
+	vga_printf("Build date: %s\n\n", build_date);
 
     Phys_memory_map phys_memory_regions;
     determine_available_phys_addresses(&phys_memory_regions, kernel_mem_info, LOW_MEM_SIZE);
