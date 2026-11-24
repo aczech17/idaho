@@ -4,6 +4,15 @@
 #include "usb_controller.h"
 #include "usb_interface.h"
 
+#define DEVICE_DESCRIPTOR 1
+#define CONFIG_DESCRIPTOR 2
+#define STRING_DESCRIPTOR 3
+#define INTERFACE_DESCRIPTOR 4
+#define ENDPOINT_DESCRIPTOR 5
+
+#define TRANSFER_EVENT ((u32)(32))
+#define COMMAND_COMPLETION_EVENT ((u32)(33))
+
 // USB_Controller → USB_Device → USB_Interface → USB_Interface_Endpoint
 
 typedef struct
@@ -58,6 +67,7 @@ typedef struct
 	u32 endpoint_contexts[31][8];
 }Input_context;
 
+void decode_event_trb(const u32 event_trb[4], u8* completion_code, u8* slot_id, u8* event_type, u8* endpoint_id);
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);
 bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt);
 bool set_configuration(USB_Device* device);

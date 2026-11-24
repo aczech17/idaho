@@ -1,6 +1,7 @@
 #include "usb_device_manager.h"
 #include "../memory/page_table.h"
 #include "../common.h"
+#include "usb_device.h"
 
 static i16 find_keyboard_interface_number(USB_Device* device)
 {
@@ -27,11 +28,6 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 	memset(manager, 0, sizeof(USB_Device_Manager));
 
 	manager->controller = controller;
-	// manager->device_count = 0;
-
-	// if (!setup_devices_buffer(manager))
-	// 	return false;
-
 
 	for (u8 port = 0; port < controller->max_ports; ++port)
 	{
@@ -98,4 +94,68 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 	return true;
 }
 
+static Keyboard_respond request_from_keyboard(USB_Device_Manager* manager, u8* respond)
+{
+	USB_Device* device = &manager->keyboard_device;
+	USB_Interface_Endpoint* ep = manager->keyboard_interrupt_in_endpoint;
+	u64 buffer_addr = (u64)ep->data_buffer_phys_addr;
+	u8 dci = 2 * (ep->endpoint_address & 0x0F) + 1;
 
+	u32 normal_trb[4];
+	normal_trb[0] = (u32)buffer_addr;
+	normal_trb[1] = (u32)(buffer_addr >> 32);
+	normal_trb[2] = 8; // transfer length
+	normal_trb[3] =
+		  (1U << 10) // TRB type: normal
+		| (1U << 5); // IOC
+
+	if (!write_to_endpoint_transfer_ring(ep, normal_trb))
+		return KEYBOARD_REQUEST_ERROR;
+
+	doorbell_ring(manager->controller, device->slot_id, dci);
+
+
+	u32 event_trb[4];
+	while (1)
+	{
+		while (!read_event_trb(device->usb_controller, event_trb)) {}
+		update_event_ring_dequeue_pointer(device->usb_controller);
+
+		u8 event_type = (event_trb[3] >> 10) & 0x3F;
+		u8 endpoint_id = (event_trb[3] >> 16) & 0x1F;
+		u8 slot_id = (event_trb[3] >> 24) & 0xFF;
+
+		if (event_type != TRANSFER_EVENT || slot_id != device->slot_id || endpoint_id != dci)
+			continue;
+
+		u8 completion_code = (event_trb[2] >> 24) & 0xFF;
+		u32 residual_length = event_trb[2] & 0xFFFFFF;
+
+		if (completion_code != 1 || residual_length != 0)
+			return KEYBOARD_REQUEST_ERROR;
+
+		break;
+	}
+
+	memcpy(respond, (void*)(ep->data_buffer_virt_addr), 8);
+
+	if (respond[0] != 0)
+		return KEYBOARD_KEYS_PRESSED;
+
+	for (u8 i = 2; i < 8; i++)
+	{
+		if (respond[i] != 0)
+			return KEYBOARD_KEYS_PRESSED;
+	}
+
+	return KEYBOARD_NO_KEYS_PRESSED;
+}
+
+void keyboard_loop(USB_Device_Manager* manager)
+{
+	for (;;)
+	{
+		Keyboard_respond resp = request_from_keyboard(manager, NULL);
+		vga_printf("%X\n", resp);
+	}
+}

@@ -80,6 +80,8 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	else
 		vga_printf("%ZKeyboard configuration failed.\n%z", 0x04);
 
+	keyboard_loop(&dvm);
+
 	// USB_Device keyboard_driver;
 	// setup_usb_device(&keyboard_driver, &xhci_info);
 	//

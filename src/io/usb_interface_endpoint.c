@@ -44,7 +44,7 @@ bool set_up_usb_interface_ep_buffs(USB_Interface_Endpoint* ep)
     return true;
 }
 
-bool write_to_transfer_ring(USB_Interface_Endpoint* ep, const u32 trb[4])
+bool write_to_endpoint_transfer_ring(USB_Interface_Endpoint* ep, const u32 trb[4])
 {
     if (ep == NULL || trb == NULL)
         return false;

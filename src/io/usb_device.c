@@ -3,14 +3,7 @@
 #include "../memory/arena_allocator.h"
 #include "../memory/page_table.h"
 
-#define DEVICE_DESCRIPTOR 1
-#define CONFIG_DESCRIPTOR 2
-#define STRING_DESCRIPTOR 3
-#define INTERFACE_DESCRIPTOR 4
-#define ENDPOINT_DESCRIPTOR 5
 
-#define TRANSFER_EVENT ((u32)(32))
-#define COMMAND_COMPLETION_EVENT ((u32)(33))
 
 // static bool detect_usb_device_connected(USB_Controller* xhci, u32 event[4], u8* port_id)
 // {
@@ -79,7 +72,7 @@ static bool reset_port(USB_Controller* usb_controller, u8 port_id)
 	return success;
 }
 
-static void decode_event_trb(const u32 event_trb[4], u8* completion_code, u8* slot_id, u8* event_type, u8* endpoint_id)
+void decode_event_trb(const u32 event_trb[4], u8* completion_code, u8* slot_id, u8* event_type, u8* endpoint_id)
 {
 	*event_type = (event_trb[3] >> 10) & 0x3F;
 	*completion_code = (event_trb[2] >> 24) & 0xFF;
