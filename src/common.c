@@ -21,6 +21,25 @@ int strcmp(const char* str1, const char* str2)
     return (unsigned char)*str1 - (unsigned char)*str2;
 }
 
+int memcmp(const void* s1, const void* s2, size_t n)
+{
+    u8* b1 = (u8*)s1;
+    u8* b2 = (u8*)s2;
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (*b1 < *b2)
+            return -1;
+        if (*b1 > *b2)
+            return 1;
+
+        ++b1;
+        ++b2;
+    }
+
+    return 0;
+}
+
 void* memcpy(void* dst, const void* src, size_t count)
 {
     u8* d = (u8*)dst;
