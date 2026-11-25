@@ -105,7 +105,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	if (setup_usb_device_manager(&dvm, &usb_controller))
 		vga_printf("%ZKeyboard configuration done.\n%z", 0x0A);
 	else
-		vga_printf("%ZKeyboard configuration failed.\n%z", 0x04);
+		panic("Keyboard configuration failed.");
 
 	Command_line cmd = {0};
 	cmd.prompt = "%";
@@ -120,11 +120,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 		if (c == '\n')
 			execute_command_line_command(&cmd);
 		else
-		{
 			add_letter_to_command_line(&cmd, c);
-			vga_printf("%c", c);
-		}
-
 	}
 
     for (;;);

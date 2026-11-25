@@ -121,6 +121,6 @@ void vga_printf(const char* format, ...)
 
 void panic(const char* msg)
 {
-    vga_printf("\nPANIC: %s\n", msg);
+    vga_printf("\n%ZPANIC: %s\n", 0x04, msg);
     for (;;);
 }

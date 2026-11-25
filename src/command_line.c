@@ -9,7 +9,11 @@ static void clear_command_line(Command_line* cmd)
 
 void add_letter_to_command_line(Command_line* cmd, char c)
 {
-    cmd->data[cmd->command_line_size++] = c;
+    if (cmd->command_line_size < COMMAND_LINE_MAX_SIZE)
+    {
+        cmd->data[cmd->command_line_size++] = c;
+        vga_printf("%c", c);
+    }
 }
 
 void execute_command_line_command(Command_line* cmd)
