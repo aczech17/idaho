@@ -37,12 +37,10 @@ void setup_rsdp(RSDP* rsdp)
     if (rsdp_addr == 0)
         panic("Could not find RSDP address.");
 
-    u8 rsdp_content[36] = {0};
-    memcpy(rsdp_content, rsdp_addr, 20);
 
     u8 checksum = 0;
     for (u16 i = 0; i < 20; ++i)
-        checksum += rsdp_content[i];
+        checksum += rsdp_addr[i];
 
     if (checksum != 0)
         panic("Bad RSDP. Checksum not valid.");
@@ -67,7 +65,7 @@ void setup_rsdp(RSDP* rsdp)
 
     u8 extended_checksum = 0;
     for (u32 i = 0; i < rsdp->length; ++i)
-        extended_checksum += *(u8*)(rsdp_addr + i);
+        extended_checksum += rsdp_addr[i];
 
     if (extended_checksum != 0)
         panic("Bad RSDP. Extended checksum not valid.");
