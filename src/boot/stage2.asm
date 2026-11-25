@@ -236,7 +236,7 @@ set_up_page_tables:
 	mov [page_table.level3 + ecx * 8], eax ; map ECX-th entry
 
 	inc ecx
-	cmp ecx, 512
+	cmp ecx, 256
 	jne .map_lvl3_table
 .done:
 

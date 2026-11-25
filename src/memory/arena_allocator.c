@@ -1,13 +1,10 @@
 #include "arena_allocator.h"
 
-#define BUMP_ALLOCATOR_BASE_PAGE (1 << 18)
-#define BUMP_ALLOCATOR_PAGE_COUNT (1 << 18)
-
 Arena_allocator xhci_driver_page_allocator =
 {
-	.first_page_number = 1 << 18,
+	.first_page_number = 1 << 17,
 	.max_page_count = 1 << 18,
-	.next_page_number = 1 << 18,
+	.next_page_number = 1 << 17,
 };
 
 Virt_addr arena_allocate_pages(Arena_allocator* allocator, u64 page_count)

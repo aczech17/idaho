@@ -66,7 +66,7 @@ static void format_build_date(char output[11])
 void kernel_main(const Kernel_mem_info* kernel_mem_info)
 {
     const Phys_addr LOW_MEM_SIZE = 1 << 20;
-    const u64 KERNEL_MEM_SIZE = 1 << 30; // The government will feed itself.
+    const u64 KERNEL_MEM_SIZE = 1 << 29; // The government will feed itself.
 
     disable_bios_cursor();
     clear_screen();
@@ -88,7 +88,6 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 
 
     setup_frame_allocator(&phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
-
     global_page_table = (Page_table*)(kernel_mem_info->page_table_address);
 
     setup_idt(idt);
