@@ -21,8 +21,7 @@ typedef struct
 	u8 keycodes[6];
 }Key_report;
 
-
 bool setup_usb_device_manager(USB_Device_Manager*, USB_Controller*);
-char get_keyboard_key(USB_Device_Manager*);
+u8 get_keyboard_hid_code(USB_Device_Manager*);
 
 #endif // IO_USB_DEVICE_MANAGER_H

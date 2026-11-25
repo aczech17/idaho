@@ -69,8 +69,8 @@ typedef struct
 
 void decode_event_trb(const u32 event_trb[4], u8* completion_code, u8* slot_id, u8* event_type, u8* endpoint_id);
 bool setup_usb_device(USB_Device* device, USB_Controller* usb_controller, u8 port_id);
-bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt);
-bool set_configuration(USB_Device* device);
+bool setup_device_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt);
+bool set_device_configuration(USB_Device* device);
 bool set_protocol(USB_Device* device, u8 interface_number);
 
 #endif // IO_USB_DEVICE_H

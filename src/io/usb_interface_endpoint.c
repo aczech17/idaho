@@ -3,7 +3,7 @@
 #include "../memory/arena_allocator.h"
 #include "../memory/page_table.h"
 
-bool set_up_usb_interface_ep_buffs(USB_Interface_Endpoint* ep)
+bool setup_usb_interface_endpoint(USB_Interface_Endpoint* ep)
 {
     Phys_addr phys_addr = allocate_general_frame();
     Virt_addr virt_addr = arena_allocate_pages(&xhci_driver_page_allocator, 1);

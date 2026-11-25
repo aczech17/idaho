@@ -45,6 +45,21 @@ void clear_screen(void)
     global_vga_buffer.row = 0;
 }
 
+void vga_backspace(void)
+{
+    if (global_vga_buffer.col ==  0)
+    {
+        if (global_vga_buffer.row > 0)
+            --global_vga_buffer.row;
+    }
+    else
+    {
+        --global_vga_buffer.col;
+    }
+
+    write_char_vga(' ', global_vga_buffer.row, global_vga_buffer.col, global_vga_buffer.color);
+}
+
 void write_char(const char c)
 {
     if (c == '\n')

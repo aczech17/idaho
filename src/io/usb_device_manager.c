@@ -83,17 +83,20 @@ bool setup_usb_device_manager(USB_Device_Manager* manager, USB_Controller* contr
 	if (!interrupt_in_ep_num_found)
 		return false;
 
-	USB_Interface_Endpoint* ep = &keyboard_interface->endpoints[interrupt_in_ep_num];
-	manager->keyboard_interrupt_in_endpoint = ep;
+	USB_Interface_Endpoint* keyboard_ep = &keyboard_interface->endpoints[interrupt_in_ep_num];
+	manager->keyboard_interrupt_in_endpoint = keyboard_ep;
 
-	if (!set_up_usb_interface_ep_buffs(ep))
+	// Suppose we have chosen device(s), interface(s) and endpoint(s).
+
+
+	if (!setup_usb_interface_endpoint(keyboard_ep))
 		return false;
 
 	Input_context* keyboard_device_context = (Input_context*)(manager->keyboard_device.input_context_virt_addr);
-	if (!set_input_context(&manager->keyboard_device, ep, keyboard_device_context))
+	if (!setup_device_input_context(&manager->keyboard_device, keyboard_ep, keyboard_device_context))
 		return false;
 
-	if (!set_configuration(&manager->keyboard_device))
+	if (!set_device_configuration(&manager->keyboard_device))
 		return false;
 
 	if (!set_protocol(&manager->keyboard_device, keyboard_interface->number))
@@ -208,7 +211,7 @@ static bool present_in_report(const Key_report* key_report, u8 hid_code)
 	return false;
 }
 
-char get_keyboard_key(USB_Device_Manager* device_manager)
+u8 get_keyboard_hid_code(USB_Device_Manager* device_manager)
 {
 	static Key_report prev_report = {0};
 	static Key_report new_report = {0};
@@ -223,7 +226,7 @@ char get_keyboard_key(USB_Device_Manager* device_manager)
 		return 0;
 	}
 
-	u8 hid_code_detected = 0;
+	u8 detected_hid_code = 0;
 	for (u8 kc = 0; kc < 6; ++kc)
 	{
 		u8 hid_code = prev_report.keycodes[kc];
@@ -232,27 +235,13 @@ char get_keyboard_key(USB_Device_Manager* device_manager)
 
 		if (!present_in_report(&new_report, hid_code))
 		{
-			hid_code_detected = hid_code;
+			detected_hid_code = hid_code;
 			break;
 		}
 	}
 
 	prev_report = new_report;
 
-	// Handle special codes.
-	switch (hid_code_detected)
-	{
-		case 0:
-			return 0;
-		case 0x2C:
-			return ' ';
-		case 0x28:
-			return '\n';
-
-		default:
-			break;
-	}
-
-	char ascii_code = (char)'A' + (char)(hid_code_detected) - (char)(0x04);
-	return ascii_code;
+	// char ascii_code = (char)'A' + (char)(detected_hid_code) - (char)(0x04);
+	return detected_hid_code;
 }

@@ -614,7 +614,7 @@ static bool send_to_ep0_and_acknowledge(USB_Device* device, u32** trbs, u8 trbs_
 //
 // }
 
-bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt)
+bool setup_device_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_context* ctxt)
 {
     u8 endpoint_number = ep->endpoint_address & 0x0F;
     u8 dci = 2 * endpoint_number + 1;
@@ -776,7 +776,7 @@ bool set_input_context(USB_Device* device, USB_Interface_Endpoint* ep, Input_con
 	return true;
 }
 
-bool set_configuration(USB_Device* device)
+bool set_device_configuration(USB_Device* device)
 {
 	const u8 SET_CONFIG = 0x09;
 

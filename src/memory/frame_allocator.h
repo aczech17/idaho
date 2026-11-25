@@ -24,7 +24,7 @@ typedef struct
 
 extern Frame_allocator global_frame_allocator;
 
-void setup_frame_allocator
+void setup_global_frame_allocator
 (
     Phys_memory_map* available_regions,
     Phys_memory_map* kernel_regions,

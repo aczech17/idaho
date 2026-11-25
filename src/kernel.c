@@ -87,7 +87,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
     measure_memory_regions(&kernel_regions, "kernel memory");
 
 
-    setup_frame_allocator(&phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
+    setup_global_frame_allocator(&phys_memory_regions, &kernel_regions, KERNEL_MEM_SIZE);
     global_page_table = (Page_table*)(kernel_mem_info->page_table_address);
 
     setup_idt(idt);
@@ -112,14 +112,8 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	vga_printf("\n%s: ", cmd.prompt);
 	for (;;)
 	{
-		char c = get_keyboard_key(&dvm);
-		if (c == 0)
-			continue;
-
-		if (c == '\n')
-			execute_command_line_command(&cmd);
-		else
-			add_letter_to_command_line(&cmd, c);
+		u8 hid_code = get_keyboard_hid_code(&dvm);
+		process_cmd(&cmd, hid_code);
 	}
 
     for (;;);

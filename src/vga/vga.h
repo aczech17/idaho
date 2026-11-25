@@ -21,6 +21,7 @@ extern const char default_vga_color;
 
 void disable_bios_cursor(void);
 void clear_screen(void);
+void vga_backspace(void);
 void write_char(const char c);
 void write_string(const char* text);
 void write_hex(u64 number, bool digit_uppercase, bool strip);

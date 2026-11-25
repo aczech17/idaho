@@ -12,7 +12,6 @@ typedef struct
     const char* prompt;
 }Command_line;
 
-void add_letter_to_command_line(Command_line*, char);
-void execute_command_line_command(Command_line*);
+void process_cmd(Command_line* cmd, u8 hid_code);
 
 #endif // COMMAND_LINE_H
