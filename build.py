@@ -24,7 +24,7 @@ kernel_c_sources = ['src/kernel.c', 'src/vga/vga.c', 'src/common.c', 'src/memory
                   'src/interrupt/handlers.c', 'src/interrupt/idt.c', 'src/io/usb_controller.c', 'src/memory/arena_allocator.c',
                     'src/io/usb_device.c', 'src/io/usb_device_manager.c', 'src/io/usb_interface.c',
                                                                           'src/io/usb_interface_endpoint.c',
-                    'src/command_line.c', 'src/acpi/rsdp.c']
+                    'src/command_line.c', 'src/acpi/rsdp.c', 'src/acpi/rsdt.c']
 
 linker_script_template = 'linker_template.ld'
 mem_layout_path = 'out/mem_layout.inc'

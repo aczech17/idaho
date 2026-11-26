@@ -6,6 +6,7 @@
 #include "io/usb_controller.h"
 #include "io/usb_device_manager.h"
 #include "command_line.h"
+#include "acpi/rsdp.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -99,6 +100,10 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 		panic("Could not configure USB controller.");
 	}
     vga_printf("USB controller set up.\n\n");
+
+	RSDP rsdp;
+	setup_rsdp(&rsdp);
+	
 
 	USB_Device_Manager dvm;
 	if (setup_usb_device_manager(&dvm, &usb_controller))

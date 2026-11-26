@@ -32,7 +32,7 @@
       "-mno-red-zone",
       "-Wall",
       "-Wextra",
-      "src/vga.c",
+      "src/vga/vga.c",
       "-o",
       "out/kernel.bin"
     ],
@@ -301,6 +301,26 @@
   },
   {
     "file": "src/acpi/rsdp.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-std=c11",
+      "-ffreestanding",
+      "-fno-pie",
+      "-fno-pic",
+      "-fno-stack-protector",
+      "-fno-asynchronous-unwind-tables",
+      "-mno-red-zone",
+      "-Wall",
+      "-Wextra",
+      "src/interrupt/idt.c",
+      "-o",
+      "out/kernel.bin"
+    ],
+    "directory": "/home/tytjan/Programowanie/idaho",
+    "output": "out/kernel.bin"
+  },
+  {
+    "file": "src/acpi/rsdt.c",
     "arguments": [
       "/usr/bin/gcc",
       "-std=c11",
