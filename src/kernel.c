@@ -8,6 +8,7 @@
 #include "command_line.h"
 #include "acpi/rsdp.h"
 #include "acpi/rsdt.h"
+#include "memory/arena_allocator.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -106,6 +107,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	setup_rsdp(&rsdp);
 
 
+	vga_printf("%X %X %X\n", rsdp.revision, rsdp.rsdt_address, rsdp.xsdt_address);
 
 	u64 rsdt_address = 0;
 	if (rsdp.revision >= 2)
@@ -113,10 +115,7 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 	else
 		rsdt_address = (u64)rsdp.rsdt_address;
 
-	// vga_printf("RSDP revision: %u\n", rsdp.revision);
-	// vga_printf("RSDT addr: %x\n", (u64)rsdp.rsdt_address);
-	// vga_printf("XSDT addr: %x\n", rsdp.xsdt_address);
-	// vga_printf("Using:     %x\n", rsdt_address);
+	map_address(rsdt_address & ~0xFFF, rsdt_address & ~0xFFF, PTE_WRITABLE);
 
 	RSDT rsdt;
 	setup_rsdt(&rsdt, rsdt_address);
