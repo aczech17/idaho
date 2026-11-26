@@ -7,6 +7,7 @@
 #include "io/usb_device_manager.h"
 #include "command_line.h"
 #include "acpi/rsdp.h"
+#include "acpi/rsdt.h"
 
 Page_table* global_page_table;
 static Idt_entry idt[256];
@@ -103,7 +104,23 @@ void kernel_main(const Kernel_mem_info* kernel_mem_info)
 
 	RSDP rsdp;
 	setup_rsdp(&rsdp);
-	
+
+
+
+	u64 rsdt_address = 0;
+	if (rsdp.revision >= 2)
+		rsdt_address = rsdp.xsdt_address;
+	else
+		rsdt_address = (u64)rsdp.rsdt_address;
+
+	// vga_printf("RSDP revision: %u\n", rsdp.revision);
+	// vga_printf("RSDT addr: %x\n", (u64)rsdp.rsdt_address);
+	// vga_printf("XSDT addr: %x\n", rsdp.xsdt_address);
+	// vga_printf("Using:     %x\n", rsdt_address);
+
+	RSDT rsdt;
+	setup_rsdt(&rsdt, rsdt_address);
+
 
 	USB_Device_Manager dvm;
 	if (setup_usb_device_manager(&dvm, &usb_controller))

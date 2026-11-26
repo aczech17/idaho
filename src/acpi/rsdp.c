@@ -1,29 +1,42 @@
 #include "rsdp.h"
+#include <stdbool.h>
 
-static u8* get_rsdp_addr(void)
+static u8 checksum(u8* addr)
+{
+    u8 cks = 0;
+    for (u16 i = 0; i < 20; ++i)
+        cks += addr[i];
+
+    return cks;
+}
+
+
+static bool is_correct_rsp_addr(u8* address)
 {
     const char* RSDP_SIG = "RSD PTR ";
     const u32 SIG_LEN = 8;
 
+    return (memcmp(address, RSDP_SIG, SIG_LEN) == 0) && (checksum(address) == 0);
+}
+
+static u8* get_rsdp_addr(void)
+{
     u16 ebda_base_addr = *(volatile u16*)(0x40E);
     u32 ebda_addr = ((u32)ebda_base_addr * 16);
 
     if (ebda_addr != 0)
         for (u16 offset = 0; offset < 1024; offset += 16)
         {
-            u32 address = ebda_addr + offset;
-            char* potential_rsdp_sig = (char*)(uintptr_t)(address);
-
-            if (memcmp(potential_rsdp_sig, RSDP_SIG, SIG_LEN) == 0)
-                return (u8*)(uintptr_t)address;
+            u8* address = (u8*)(uintptr_t)(ebda_addr + offset);
+            if (is_correct_rsp_addr(address))
+                return address;
         }
 
     for (u32 addr = 0xE0000; addr < 0xFFFFF; addr += 16)
     {
-        char* potential_rsdp_sig = (char*)(uintptr_t)(addr);
-
-        if (memcmp(potential_rsdp_sig, RSDP_SIG, SIG_LEN) == 0)
-            return (u8*)(uintptr_t)addr;
+        u8* address = (u8*)(uintptr_t)(addr);
+        if (is_correct_rsp_addr(address))
+            return address;
     }
 
     return 0;
@@ -36,15 +49,6 @@ void setup_rsdp(RSDP* rsdp)
     u8* rsdp_addr = get_rsdp_addr();
     if (rsdp_addr == 0)
         panic("Could not find RSDP address.");
-
-
-    u8 checksum = 0;
-    for (u16 i = 0; i < 20; ++i)
-        checksum += rsdp_addr[i];
-
-    if (checksum != 0)
-        panic("Bad RSDP. Checksum not valid.");
-
 
     memcpy(rsdp->signature, rsdp_addr, 8);
     memcpy(&rsdp->checksum, rsdp_addr + 8, 1);
